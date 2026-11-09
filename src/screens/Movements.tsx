@@ -4,6 +4,7 @@ import { Header } from '../components/Header';
 import { MonthPicker } from '../components/MonthPicker';
 import { Segmented } from '../components/Segmented';
 import { TxRow } from '../components/TxRow';
+import { SectionFilter, matchesSection } from '../components/SectionFilter';
 import { useData, useMonthTx } from '../lib/data';
 import type { Transaction } from '../lib/types';
 import { dayLabel, money } from '../lib/utils';
@@ -22,10 +23,11 @@ export function Movements({ month, setMonth, onEdit, onSettings, onRecurring }: 
   const { data: txs, error } = useMonthTx(month);
   const { catMap: cats, recurring } = useData();
   const [filter, setFilter] = useState<Filter>('all');
+  const [section, setSection] = useState('all');
 
   const { groups, income, expense } = useMemo(() => {
     const list = (txs ?? [])
-      .filter((t) => filter === 'all' || t.type === filter)
+      .filter((t) => (filter === 'all' || t.type === filter) && matchesSection(t.sectionId, section))
       .sort((a, b) => (a.date === b.date ? b.createdAt.localeCompare(a.createdAt) : a.date < b.date ? 1 : -1));
     const g: Array<{ date: string; items: Transaction[]; net: number }> = [];
     let inc = 0;
@@ -42,7 +44,7 @@ export function Movements({ month, setMonth, onEdit, onSettings, onRecurring }: 
       last.net += t.type === 'income' ? t.amount : -t.amount;
     }
     return { groups: g, income: inc, expense: exp };
-  }, [txs, filter]);
+  }, [txs, filter, section]);
 
   return (
     <div className="screen-inner">
@@ -61,6 +63,7 @@ export function Movements({ month, setMonth, onEdit, onSettings, onRecurring }: 
           </span>
         </span>
       </button>
+      <SectionFilter value={section} onChange={setSection} hasUnassigned={(txs ?? []).some((t) => !t.sectionId)} />
       <Segmented
         value={filter}
         onChange={setFilter}

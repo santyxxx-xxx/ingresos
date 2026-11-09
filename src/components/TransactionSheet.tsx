@@ -2,8 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Check, Repeat, Trash2 } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { Segmented } from './Segmented';
+import { CategoryPicker } from './CategoryPicker';
+import { SectionPicker } from './SectionPicker';
 import { useFeedback } from './Feedback';
-import { byGroup, childrenOf, fetchPlaces, topLevel, useData } from '../lib/data';
+import { fetchPlaces, getLastSection, setLastSection, useData } from '../lib/data';
 import type { Transaction, TxType } from '../lib/types';
 import { centsToInput, haptic, normalizePlace, parseAmount, toISODate, todayISO } from '../lib/utils';
 
@@ -21,11 +23,12 @@ function yesterdayISO() {
 }
 
 export function TransactionSheet({ open, onClose, editing, defaultType }: Props) {
-  const { uid, categories, catMap, groups, recurring, saveTransaction, deleteTransaction, saveRecurring } = useData();
+  const { uid, catMap, groups, recurring, saveTransaction, deleteTransaction, saveRecurring } = useData();
   const { confirm, toast } = useFeedback();
   const [type, setType] = useState<TxType>(defaultType);
   const [amount, setAmount] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [sectionId, setSectionId] = useState<string | null>(null);
   const [place, setPlace] = useState('');
   const [date, setDate] = useState(todayISO());
   const [error, setError] = useState('');
@@ -43,32 +46,29 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
       setType(editing.type);
       setAmount(centsToInput(editing.amount));
       setCategoryId(editing.categoryId);
+      setSectionId(editing.sectionId);
       setPlace(editing.place);
       setDate(editing.date);
     } else {
       setType(defaultType);
       setAmount('');
       setCategoryId(null);
+      // Se propone la última sección usada
+      const last = getLastSection();
+      setSectionId(last && groups.some((g) => g.id === last) ? last : groups[0]?.id ?? null);
       setPlace('');
       setDate(todayISO());
       const t = setTimeout(() => amountRef.current?.focus({ preventScroll: true }), 380);
       return () => clearTimeout(t);
     }
+    // groups solo se usa para la propuesta inicial
   }, [open, editing, defaultType]);
 
   useEffect(() => {
     if (open) fetchPlaces(uid, type).then(setPlaces);
   }, [open, uid, type]);
 
-  const roots = useMemo(() => topLevel(categories, type), [categories, type]);
-  const sections = useMemo(() => byGroup(roots, groups), [roots, groups]);
   const fromRule = editing?.recurringId ? recurring.find((r) => r.id === editing.recurringId) : undefined;
-  const selected = categoryId ? catMap.get(categoryId) : undefined;
-  const selectedRootId = selected ? selected.parentId ?? selected.id : null;
-  const subs = useMemo(
-    () => (selectedRootId ? childrenOf(categories, selectedRootId) : []),
-    [categories, selectedRootId]
-  );
 
   const suggestions = useMemo(() => {
     const q = normalizePlace(place);
@@ -78,7 +78,8 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
   const changeType = (t: TxType) => {
     haptic(6);
     setType(t);
-    if (selected && selected.type !== t) setCategoryId(null);
+    const c = categoryId ? catMap.get(categoryId) : undefined;
+    if (c && c.type !== t) setCategoryId(null);
   };
 
   const submit = async () => {
@@ -89,8 +90,8 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
       return;
     }
     const keepsUncategorized = editing && editing.categoryId === null && categoryId === null;
-    if (!categoryId && roots.length > 0 && !keepsUncategorized) {
-      setError('Elige una categoría');
+    if (!categoryId && !keepsUncategorized) {
+      setError('Elige o crea una categoría');
       haptic([20, 40, 20]);
       return;
     }
@@ -105,18 +106,19 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
           type,
           amount: cents,
           categoryId,
+          sectionId,
           place: place.trim(),
           dayOfMonth: Number(date.slice(8, 10)),
           startDate: date,
           active: true
         });
-        haptic(15);
         toast(`Se repetirá el día ${Number(date.slice(8, 10))} de cada mes`);
       } else {
-        await saveTransaction({ id: editing?.id, type, amount: cents, categoryId, place: place.trim(), date });
-        haptic(15);
+        await saveTransaction({ id: editing?.id, type, amount: cents, categoryId, sectionId, place: place.trim(), date });
         toast(editing ? 'Movimiento actualizado' : type === 'income' ? 'Ingreso guardado' : 'Gasto guardado');
       }
+      if (!editing) setLastSection(sectionId);
+      haptic(15);
       onClose();
     } catch (e) {
       setSaving(false);
@@ -172,88 +174,21 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
         />
       </div>
 
-      <div>
-        <span className="field-label">Categoría</span>
-        {sections.map((sec) => (
-          <div className="chip-section" key={sec.group?.id ?? 'none'}>
-            {sections.length > 1 && (
-              <div className="chip-section-title">
-                {sec.group ? `${sec.group.emoji} ${sec.group.name}` : 'Otras'}
-              </div>
-            )}
-            <div className="chips">
-              {sec.items.map((c) => (
-                <button
-                  key={c.id}
-                  type="button"
-                  className={`chip ${type}`}
-                  aria-pressed={selectedRootId === c.id}
-                  onClick={() => {
-                    haptic(5);
-                    setError('');
-                    setCategoryId(c.id);
-                  }}
-                >
-                  <span className="e">{c.emoji}</span>
-                  {c.name}
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-        <div className="chips">
-          {editing && editing.categoryId === null && (
-            <button
-              type="button"
-              className={`chip ${type}`}
-              aria-pressed={categoryId === null}
-              onClick={() => setCategoryId(null)}
-            >
-              <span className="e">❔</span>Sin categoría
-            </button>
-          )}
-          {roots.length === 0 && (
-            <p className="note">
-              No tienes categorías de {type === 'income' ? 'ingreso' : 'gasto'}. Puedes crearlas en la pestaña Categorías.
-            </p>
-          )}
-        </div>
-      </div>
+      <SectionPicker value={sectionId} onChange={setSectionId} />
 
-      {subs.length > 0 && selectedRootId && (
-        <div className="sub-picker">
-          <span className="field-label">Subcategoría</span>
-          <div className="chips">
-            <button
-              type="button"
-              className="chip small"
-              aria-pressed={categoryId === selectedRootId}
-              onClick={() => setCategoryId(selectedRootId)}
-            >
-              General
-            </button>
-            {subs.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                className="chip small"
-                aria-pressed={categoryId === s.id}
-                onClick={() => {
-                  haptic(5);
-                  setCategoryId(s.id);
-                }}
-              >
-                <span className="e">{s.emoji}</span>
-                {s.name}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      <CategoryPicker
+        type={type}
+        value={categoryId}
+        allowNone={!!editing && editing.categoryId === null}
+        onChange={(id) => {
+          setError('');
+          setCategoryId(id);
+        }}
+      />
 
       <div>
         <label className="field-label" htmlFor="tx-place">
-          Lugar
+          {type === 'income' ? 'De dónde viene' : 'Lugar'}
         </label>
         <input
           id="tx-place"

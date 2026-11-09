@@ -132,7 +132,8 @@ export async function parseBackup(file: File): Promise<BackupFile> {
       place: str(r.place),
       dayOfMonth: Math.min(31, Math.max(1, Number(r.dayOfMonth) || 1)),
       startDate: isDate(r.startDate) ? (r.startDate as string) : todayISO(),
-      active: r.active !== false
+      active: r.active !== false,
+      sectionId: typeof r.sectionId === 'string' && groupIds.has(r.sectionId) ? r.sectionId : null
     }));
   const recIds = new Set(recurring.map((r) => r.id));
 
@@ -146,7 +147,8 @@ export async function parseBackup(file: File): Promise<BackupFile> {
       place: str(t.place),
       date: t.date as string,
       createdAt: str(t.createdAt, new Date().toISOString()),
-      recurringId: typeof t.recurringId === 'string' && recIds.has(t.recurringId) ? t.recurringId : null
+      recurringId: typeof t.recurringId === 'string' && recIds.has(t.recurringId) ? t.recurringId : null,
+      sectionId: typeof t.sectionId === 'string' && groupIds.has(t.sectionId) ? t.sectionId : null
     }));
 
   return { app: 'ingresos', version: 3, exportedAt: str(d.exportedAt), groups, categories, transactions, recurring };
@@ -193,6 +195,7 @@ export async function restoreBackup(uid: string, b: BackupFile) {
       day_of_month: r.dayOfMonth,
       start_date: r.startDate,
       active: r.active,
+      section_id: r.sectionId,
       // los meses anteriores vienen en la copia; el actual se genera de nuevo sin duplicar (id fijo por mes)
       last_month: `${shiftMonth(todayISO().slice(0, 7), -1)}-01`
     }))
@@ -207,7 +210,8 @@ export async function restoreBackup(uid: string, b: BackupFile) {
       category_id: t.categoryId,
       place: t.place,
       date: t.date,
-      recurring_id: t.recurringId
+      recurring_id: t.recurringId,
+      section_id: t.sectionId
     }))
   );
 }

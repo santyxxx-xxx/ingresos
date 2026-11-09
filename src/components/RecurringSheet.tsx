@@ -3,13 +3,14 @@ import { ArrowLeft, Check, Pause, Play, Plus, Trash2 } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { Segmented } from './Segmented';
 import { CategoryPicker } from './CategoryPicker';
+import { SectionPicker } from './SectionPicker';
 import { useFeedback } from './Feedback';
 import { catInfo, useData } from '../lib/data';
 import type { Recurring, TxType } from '../lib/types';
 import { centsToInput, haptic, money, parseAmount, todayISO } from '../lib/utils';
 
 export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
-  const { recurring, catMap, saveRecurring, deleteRecurring } = useData();
+  const { recurring, catMap, groupMap, groups, saveRecurring, deleteRecurring } = useData();
   const { confirm, toast } = useFeedback();
   const [mode, setMode] = useState<'list' | 'form'>('list');
   const [editing, setEditing] = useState<Recurring | null>(null);
@@ -17,6 +18,7 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
   const [type, setType] = useState<TxType>('expense');
   const [amount, setAmount] = useState('');
   const [categoryId, setCategoryId] = useState<string | null>(null);
+  const [sectionId, setSectionId] = useState<string | null>(null);
   const [place, setPlace] = useState('');
   const [day, setDay] = useState(1);
   const [active, setActive] = useState(true);
@@ -32,6 +34,7 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
     setType(r?.type ?? 'expense');
     setAmount(r ? centsToInput(r.amount) : '');
     setCategoryId(r?.categoryId ?? null);
+    setSectionId(r ? r.sectionId : groups[0]?.id ?? null);
     setPlace(r?.place ?? '');
     setDay(r?.dayOfMonth ?? new Date().getDate());
     setActive(r?.active ?? true);
@@ -51,6 +54,7 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
         type,
         amount: cents,
         categoryId,
+        sectionId,
         place: place.trim(),
         dayOfMonth: day,
         startDate: editing?.startDate ?? todayISO(),
@@ -128,6 +132,7 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
                         <span className="title">{r.place || c.name}</span>
                         <span className="meta">
                           Día {r.dayOfMonth} · {c.full}
+                          {r.sectionId && groupMap.get(r.sectionId) ? ` · ${groupMap.get(r.sectionId)!.name}` : ''}
                           {!r.active && ' · en pausa'}
                         </span>
                       </span>
@@ -189,6 +194,7 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
               }}
             />
           </div>
+          <SectionPicker value={sectionId} onChange={setSectionId} />
           <CategoryPicker
             type={type}
             value={categoryId}

@@ -4,7 +4,6 @@ import { Header } from '../components/Header';
 import { Segmented } from '../components/Segmented';
 import {
   UNCATEGORIZED,
-  byGroup,
   childrenOf,
   fetchCategoryUsage,
   fetchUncategorizedCount,
@@ -35,8 +34,6 @@ export function Categories({ onEdit, onNew, onEditGroup, onSettings }: Props) {
   }, [uid, type, txVersion, categories]);
 
   const roots = topLevel(categories, type);
-  const sections = byGroup(roots, groups);
-  const emptyGroups = groups.filter((g) => !sections.some((s) => s.group?.id === g.id));
   const label = (n: number) => `${n} movimiento${n === 1 ? '' : 's'}`;
 
   const renderCategory = (c: Category) => {
@@ -93,38 +90,33 @@ export function Categories({ onEdit, onNew, onEditGroup, onSettings }: Props) {
 
       {loadError && <p className="error-text">{loadError}</p>}
 
-      {sections.map((sec) => (
-        <div className="group-block" key={sec.group?.id ?? 'none'}>
-          <div className="group-head">
-            <h3>
-              {sec.group ? (
-                <>
-                  <span className="e">{sec.group.emoji}</span> {sec.group.name}
-                </>
-              ) : (
-                'Sin grupo'
-              )}
-            </h3>
-            {sec.group && (
-              <button className="icon-btn" onClick={() => onEditGroup(sec.group)} aria-label={`Editar ${sec.group.name}`}>
-                <Pencil size={16} strokeWidth={1.75} />
-              </button>
-            )}
-          </div>
-          {sec.items.map(renderCategory)}
+      <section className="card glass sections-card">
+        <div className="card-title" style={{ marginBottom: 8 }}>
+          <h2>Secciones</h2>
+          <button className="link" onClick={() => onEditGroup(null)}>
+            + Nueva
+          </button>
         </div>
-      ))}
-
-      {emptyGroups.length > 0 && (
+        <p className="note" style={{ padding: 0, marginBottom: 12 }}>
+          A quién o a qué pertenece cada gasto o ingreso: Casa, Personal, Hijo, Esposa… En el resumen puedes ver cada
+          sección o el total.
+        </p>
         <div className="chips">
-          {emptyGroups.map((g) => (
-            <button key={g.id} className="chip small" onClick={() => onEditGroup(g)}>
+          {groups.map((g) => (
+            <button key={g.id} className="chip" onClick={() => onEditGroup(g)}>
               <span className="e">{g.emoji}</span>
-              {g.name} · vacío
+              {g.name}
+              <Pencil size={13} strokeWidth={1.75} style={{ opacity: 0.5 }} />
             </button>
           ))}
+          {groups.length === 0 && <span className="note">Aún no tienes secciones.</span>}
         </div>
-      )}
+      </section>
+
+      <div className="group-head">
+        <h3>{type === 'income' ? 'Categorías de ingreso' : 'Categorías de gasto'}</h3>
+      </div>
+      {roots.map(renderCategory)}
 
       {none > 0 && (
         <section className="list-card glass">
@@ -145,18 +137,12 @@ export function Categories({ onEdit, onNew, onEditGroup, onSettings }: Props) {
         </section>
       )}
 
-      <div className="btn-row">
-        <button className="btn btn-primary" onClick={() => onNew(type, null)}>
-          <Plus size={20} strokeWidth={2} />
-          Categoría
-        </button>
-        <button className="btn btn-ghost" onClick={() => onEditGroup(null)}>
-          <Plus size={20} strokeWidth={2} />
-          Grupo
-        </button>
-      </div>
+      <button className="btn btn-primary" onClick={() => onNew(type, null)}>
+        <Plus size={20} strokeWidth={2} />
+        Nueva categoría
+      </button>
       <p className="note" style={{ textAlign: 'center' }}>
-        Toca una categoría para cambiar su nombre, emoji, grupo o presupuesto. Si borras una categoría, sus movimientos
+        Toca una categoría para cambiar su nombre, emoji o presupuesto. También puedes crear categorías al registrar un gasto. Si borras una categoría, sus movimientos
         pasan a “Sin categoría”; si borras una subcategoría, pasan a su categoría principal.
       </p>
     </div>

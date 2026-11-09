@@ -1,5 +1,5 @@
 import type { Category, Transaction } from '../lib/types';
-import { catInfo } from '../lib/data';
+import { catInfo, useData } from '../lib/data';
 import { money, shortDate } from '../lib/utils';
 
 export function TxRow({ tx, cats, onClick, showDate }: {
@@ -9,6 +9,8 @@ export function TxRow({ tx, cats, onClick, showDate }: {
   showDate?: boolean;
 }) {
   const c = catInfo(cats, tx.categoryId);
+  const { groupMap } = useData();
+  const section = tx.sectionId ? groupMap.get(tx.sectionId) : undefined;
   const sign = tx.type === 'income' ? '+' : '−';
   return (
     <button className="tx pressable" onClick={onClick}>
@@ -18,6 +20,7 @@ export function TxRow({ tx, cats, onClick, showDate }: {
         <span className="meta">
           {tx.place ? c.full : tx.type === 'income' ? 'Ingreso' : 'Gasto'}
           {showDate && ` · ${shortDate(tx.date)}`}
+          {section && ` · ${section.emoji} ${section.name}`}
           {tx.recurringId && ' · 🔁'}
         </span>
       </span>

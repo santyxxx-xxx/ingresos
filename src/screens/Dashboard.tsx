@@ -5,7 +5,8 @@ import { MonthPicker } from '../components/MonthPicker';
 import { Donut, type Slice } from '../components/Donut';
 import { TxRow } from '../components/TxRow';
 import { useAccount } from '../lib/account';
-import { UNCATEGORIZED, catInfo, groupIdOf, rootOf, useData, useTxRange } from '../lib/data';
+import { UNCATEGORIZED, catInfo, rootOf, useData, useTxRange } from '../lib/data';
+import { SectionFilter, matchesSection } from '../components/SectionFilter';
 import type { Category, Transaction } from '../lib/types';
 import { currentMonth, money, moneyParts, monthLabel, normalizePlace, shiftMonth, todayISO } from '../lib/utils';
 
@@ -219,7 +220,7 @@ function MonthsChart({
 
 export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings, onGoCategories }: Props) {
   const account = useAccount();
-  const { catMap, categories, groups, recurring } = useData();
+  const { catMap, categories, groups, groupMap, recurring } = useData();
   const from = shiftMonth(month, -5);
   const { data: range, error, loading } = useTxRange(from, month);
   const [group, setGroup] = useState<string>('all');
@@ -229,8 +230,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
 
   const d = useMemo(() => {
     const all = range ?? [];
-    const inGroup = (t: Transaction) => group === 'all' || groupIdOf(catMap, t.categoryId) === group;
-    const filtered = all.filter(inGroup);
+    const filtered = all.filter((t) => matchesSection(t.sectionId, group));
     const cur = filtered.filter((t) => t.date.startsWith(month));
     const prev = filtered.filter((t) => t.date.startsWith(prevMonth));
     const exp = cur.filter((t) => t.type === 'expense');
@@ -302,7 +302,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
 
     // Presupuestos (categorías principales de gasto con presupuesto)
     const budgets = categories
-      .filter((c) => !c.parentId && c.type === 'expense' && c.budget && (group === 'all' || c.groupId === group))
+      .filter((c) => !c.parentId && c.type === 'expense' && c.budget && group === 'all')
       .map((c) => {
         const spent = nowMap.get(c.id) ?? 0;
         return { cat: c, spent, budget: c.budget!, pct: (spent / c.budget!) * 100 };
@@ -336,13 +336,13 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
     const today = Number(todayISO().slice(8, 10));
     const dim = daysIn(month);
     return recurring
-      .filter((r) => r.active && (group === 'all' || groupIdOf(catMap, r.categoryId) === group))
+      .filter((r) => r.active && matchesSection(r.sectionId, group))
       .map((r) => {
         const day = Math.min(r.dayOfMonth, dim);
         return { r, day, done: day <= today && r.startDate <= todayISO() };
       })
       .sort((a, b) => a.day - b.day);
-  }, [recurring, isCurrent, month, group, catMap]);
+  }, [recurring, isCurrent, month, group]);
 
   const slices: Slice[] = useMemo(() => {
     const top = d.expenseRank.slice(0, 5).map((r, i) => ({ key: r.id, value: r.value, color: COLORS[i] }));
@@ -374,24 +374,19 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
       />
       <MonthPicker month={month} onChange={setMonth} />
 
-      {groups.length > 0 && (
-        <div className="group-filter no-select" role="tablist" aria-label="Filtrar por grupo">
-          <button role="tab" aria-selected={group === 'all'} onClick={() => setGroup('all')}>
-            Todo
-          </button>
-          {groups.map((g) => (
-            <button key={g.id} role="tab" aria-selected={group === g.id} onClick={() => setGroup(g.id)}>
-              <span className="e">{g.emoji}</span> {g.name}
-            </button>
-          ))}
-        </div>
-      )}
+      <SectionFilter value={group} onChange={setGroup} hasUnassigned={(range ?? []).some((t) => !t.sectionId)} />
 
       {error && <p className="error-text">{error}</p>}
 
       <section className={`card glass balance ${dim}`}>
         <div className="k">
-          {group === 'all' ? 'Balance del mes' : `Balance de ${groups.find((g) => g.id === group)?.name ?? ''}`}
+          {group === 'all'
+            ? groups.length
+              ? 'Balance total del mes'
+              : 'Balance del mes'
+            : group === 'none'
+              ? 'Balance sin sección'
+              : `Balance de ${groupMap.get(group)?.name ?? ''}`}
         </div>
         <div className={`big-number ${d.balance < 0 ? 'neg' : ''}`}>
           {bal.sign}
@@ -494,6 +489,10 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
             })}
           </div>
         </section>
+      ) : group !== 'all' && hasBudgets ? (
+        <p className="note" style={{ textAlign: 'center' }}>
+          Los presupuestos se ven en la vista Total.
+        </p>
       ) : (
         !hasBudgets &&
         d.expense > 0 && (

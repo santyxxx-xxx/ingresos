@@ -22,14 +22,13 @@ interface Props {
 }
 
 export function CategorySheet({ open, onClose, editing, defaultType, parent }: Props) {
-  const { uid, categories, catMap, groups, saveCategory, deleteCategory } = useData();
+  const { uid, categories, catMap, saveCategory, deleteCategory } = useData();
   const { confirm, toast } = useFeedback();
   const [type, setType] = useState<TxType>(defaultType);
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState('🏷️');
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
-  const [groupId, setGroupId] = useState<string | null>(null);
   const [budget, setBudget] = useState('');
 
   const editingParent = editing?.parentId ? catMap.get(editing.parentId) : undefined;
@@ -43,14 +42,12 @@ export function CategorySheet({ open, onClose, editing, defaultType, parent }: P
       setType(editing.type);
       setName(editing.name);
       setEmoji(editing.emoji);
-      setGroupId(editing.groupId);
       setBudget(editing.budget ? centsToInput(editing.budget) : '');
     } else {
       const t = parent?.type ?? defaultType;
       setType(t);
       setName('');
       setEmoji(parent?.emoji ?? EMOJIS[t][0]);
-      setGroupId(groups[0]?.id ?? null);
       setBudget('');
     }
   }, [open, editing, defaultType, parent]);
@@ -78,7 +75,6 @@ export function CategorySheet({ open, onClose, editing, defaultType, parent }: P
         emoji: emoji.trim() || '🏷️',
         type,
         parentId: editing ? editing.parentId : parent?.id ?? null,
-        groupId: isSub ? undefined : groupId,
         budget: isSub ? undefined : type === 'expense' ? budgetCents : null
       });
       haptic(15);
@@ -198,29 +194,6 @@ export function CategorySheet({ open, onClose, editing, defaultType, parent }: P
           />
         </div>
       </div>
-
-      {!isSub && groups.length > 0 && (
-        <div>
-          <span className="field-label">Grupo</span>
-          <div className="chips">
-            {groups.map((g) => (
-              <button
-                key={g.id}
-                type="button"
-                className="chip small"
-                aria-pressed={groupId === g.id}
-                onClick={() => setGroupId(g.id)}
-              >
-                <span className="e">{g.emoji}</span>
-                {g.name}
-              </button>
-            ))}
-            <button type="button" className="chip small" aria-pressed={groupId === null} onClick={() => setGroupId(null)}>
-              Sin grupo
-            </button>
-          </div>
-        </div>
-      )}
 
       {!isSub && type === 'expense' && (
         <div>

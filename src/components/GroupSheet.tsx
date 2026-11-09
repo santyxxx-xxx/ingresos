@@ -6,10 +6,10 @@ import { useData } from '../lib/data';
 import type { Group } from '../lib/types';
 import { haptic } from '../lib/utils';
 
-const EMOJIS = ['🏠', '🙋', '💼', '👨‍👩‍👧', '🚗', '🐶', '🎓', '✈️', '❤️', '🛍️', '🏢', '🌱'];
+const EMOJIS = ['🏠', '🙋', '👦', '👧', '👩', '👨', '👵', '👴', '👶', '❤️', '💼', '🐶', '🚗', '🎓', '✈️', '🌱'];
 
 export function GroupSheet({ open, onClose, editing }: { open: boolean; onClose: () => void; editing: Group | null }) {
-  const { categories, saveGroup, deleteGroup } = useData();
+  const { saveGroup, deleteGroup } = useData();
   const { confirm, toast } = useFeedback();
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState(EMOJIS[0]);
@@ -31,7 +31,7 @@ export function GroupSheet({ open, onClose, editing }: { open: boolean; onClose:
     try {
       await saveGroup({ id: editing?.id, name: n, emoji: emoji.trim() || '📁' });
       haptic(15);
-      toast(editing ? 'Grupo actualizado' : 'Grupo creado');
+      toast(editing ? 'Sección actualizada' : 'Sección creada');
       onClose();
     } catch (e) {
       setSaving(false);
@@ -41,19 +41,16 @@ export function GroupSheet({ open, onClose, editing }: { open: boolean; onClose:
 
   const remove = async () => {
     if (!editing) return;
-    const n = categories.filter((c) => c.groupId === editing.id).length;
     const ok = await confirm({
       title: `Borrar “${editing.name}”`,
-      message: n
-        ? `Sus ${n} categoría${n === 1 ? '' : 's'} no se borran: quedan “Sin grupo” y puedes moverlas a otro.`
-        : 'Este grupo no tiene categorías.',
-      confirmLabel: 'Borrar grupo',
+      message: 'Sus movimientos no se borran: quedan “Sin sección” y los puedes cambiar a otra cuando quieras.',
+      confirmLabel: 'Borrar sección',
       danger: true
     });
     if (!ok) return;
     try {
       await deleteGroup(editing);
-      toast('Grupo borrado');
+      toast('Sección borrada');
       onClose();
     } catch (e) {
       toast((e as Error).message, 'error');
@@ -61,10 +58,10 @@ export function GroupSheet({ open, onClose, editing }: { open: boolean; onClose:
   };
 
   return (
-    <Sheet open={open} onClose={onClose} title={editing ? 'Editar grupo' : 'Nuevo grupo'}>
+    <Sheet open={open} onClose={onClose} title={editing ? 'Editar sección' : 'Nueva sección'}>
       <p className="note" style={{ marginTop: -6 }}>
-        Los grupos juntan varias categorías, por ejemplo <b>Casa</b> (comida, servicios, arriendo) y <b>Personal</b>{' '}
-        (ropa, salidas). En el resumen puedes ver cada grupo por separado.
+        Las secciones dicen a quién o a qué pertenece cada movimiento: <b>Casa</b>, <b>Personal</b>, <b>Hijo</b>,{' '}
+        <b>Esposa</b>, <b>Negocio</b>… En el resumen puedes ver cada una por separado o el total.
       </p>
       <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end' }}>
         <div style={{ width: 76 }}>
@@ -86,7 +83,7 @@ export function GroupSheet({ open, onClose, editing }: { open: boolean; onClose:
           <input
             id="grp-name"
             className="input"
-            placeholder="Ej. Negocio"
+            placeholder="Ej. Hijo, Esposa, Negocio"
             value={name}
             maxLength={40}
             onChange={(e) => {
@@ -107,12 +104,12 @@ export function GroupSheet({ open, onClose, editing }: { open: boolean; onClose:
       {error && <p className="error-text">{error}</p>}
       <button className="btn btn-primary" onClick={submit} disabled={saving}>
         <Check size={20} strokeWidth={2} />
-        {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear grupo'}
+        {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Crear sección'}
       </button>
       {editing && (
         <button className="btn btn-danger" onClick={remove}>
           <Trash2 size={18} strokeWidth={1.75} />
-          Borrar grupo
+          Borrar sección
         </button>
       )}
     </Sheet>

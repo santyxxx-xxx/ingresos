@@ -1,6 +1,6 @@
 export type TxType = 'expense' | 'income';
 
-/** Grupo grande de categorías, ej. Casa, Personal */
+/** Sección: a quién o a qué pertenece un movimiento, ej. Casa, Personal, Hijo */
 export interface Group {
   id: string;
   name: string;
@@ -35,6 +35,8 @@ export interface Transaction {
   date: string;
   createdAt: string;
   recurringId: string | null;
+  /** Sección (Casa, Personal, Hijo…); null = sin sección */
+  sectionId: string | null;
 }
 
 export interface Recurring {
@@ -46,6 +48,7 @@ export interface Recurring {
   dayOfMonth: number;
   startDate: string;
   active: boolean;
+  sectionId: string | null;
 }
 
 export interface BackupFile {

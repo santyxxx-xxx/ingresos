@@ -31,6 +31,7 @@ export interface TxRow {
   date: string;
   created_at: string;
   recurring_id: string | null;
+  section_id: string | null;
 }
 export interface RecRow {
   id: string;
@@ -41,12 +42,13 @@ export interface RecRow {
   day_of_month: number;
   start_date: string;
   active: boolean;
+  section_id: string | null;
 }
 
 export const GROUP_COLS = 'id,name,emoji,sort_order';
 export const CAT_COLS = 'id,name,emoji,type,parent_id,group_id,monthly_budget_cents,sort_order,created_at';
-export const TX_COLS = 'id,type,amount_cents,category_id,place,date,created_at,recurring_id';
-export const REC_COLS = 'id,type,amount_cents,category_id,place,day_of_month,start_date,active';
+export const TX_COLS = 'id,type,amount_cents,category_id,place,date,created_at,recurring_id,section_id';
+export const REC_COLS = 'id,type,amount_cents,category_id,place,day_of_month,start_date,active,section_id';
 
 export const groupFromRow = (r: GroupRow): Group => ({ id: r.id, name: r.name, emoji: r.emoji, order: r.sort_order });
 
@@ -70,7 +72,8 @@ export const txFromRow = (r: TxRow): Transaction => ({
   place: r.place ?? '',
   date: r.date.slice(0, 10),
   createdAt: r.created_at,
-  recurringId: r.recurring_id ?? null
+  recurringId: r.recurring_id ?? null,
+  sectionId: r.section_id ?? null
 });
 
 export const recFromRow = (r: RecRow): Recurring => ({
@@ -81,7 +84,8 @@ export const recFromRow = (r: RecRow): Recurring => ({
   place: r.place ?? '',
   dayOfMonth: r.day_of_month,
   startDate: r.start_date.slice(0, 10),
-  active: r.active
+  active: r.active,
+  sectionId: r.section_id ?? null
 });
 
 export function fail(e: unknown): never {
@@ -104,7 +108,9 @@ interface DataCtx {
   /** Cambia cada vez que se modifican movimientos: las vistas vuelven a consultar */
   txVersion: number;
   refresh: () => void;
-  saveTransaction: (t: Pick<Transaction, 'type' | 'amount' | 'categoryId' | 'place' | 'date'> & { id?: string }) => Promise<void>;
+  saveTransaction: (
+    t: Pick<Transaction, 'type' | 'amount' | 'categoryId' | 'place' | 'date' | 'sectionId'> & { id?: string }
+  ) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
   saveCategory: (c: {
     id?: string;
@@ -114,9 +120,9 @@ interface DataCtx {
     parentId?: string | null;
     groupId?: string | null;
     budget?: number | null;
-  }) => Promise<void>;
+  }) => Promise<string>;
   deleteCategory: (c: Category) => Promise<void>;
-  saveGroup: (g: { id?: string; name: string; emoji: string }) => Promise<void>;
+  saveGroup: (g: { id?: string; name: string; emoji: string }) => Promise<string>;
   deleteGroup: (g: Group) => Promise<void>;
   saveRecurring: (r: RecurringInput) => Promise<void>;
   deleteRecurring: (id: string) => Promise<void>;
@@ -198,7 +204,14 @@ export function DataProvider({ uid, children }: { uid: string; children: ReactNo
 
   const saveTransaction: DataCtx['saveTransaction'] = useCallback(
     async (t) => {
-      const row = { type: t.type, amount_cents: t.amount, category_id: t.categoryId, place: t.place, date: t.date };
+      const row = {
+        type: t.type,
+        amount_cents: t.amount,
+        category_id: t.categoryId,
+        place: t.place,
+        date: t.date,
+        section_id: t.sectionId
+      };
       const { error } = t.id
         ? await supabase.from('transactions').update(row).eq('user_id', uid).eq('id', t.id)
         : await supabase.from('transactions').insert({ ...row, user_id: uid });
@@ -223,21 +236,28 @@ export function DataProvider({ uid, children }: { uid: string; children: ReactNo
       const patch: Record<string, unknown> = { name: c.name, emoji: c.emoji };
       if (c.groupId !== undefined && isRoot) patch.group_id = c.groupId;
       if (c.budget !== undefined) patch.monthly_budget_cents = c.budget && c.budget > 0 ? c.budget : null;
+      let id = c.id;
       if (c.id) {
         const { error } = await supabase.from('categories').update(patch).eq('user_id', uid).eq('id', c.id);
         if (error) fail(error);
       } else {
         const maxOrder = categories.reduce((m, x) => Math.max(m, x.order), 0);
-        const { error } = await supabase.from('categories').insert({
-          ...patch,
-          user_id: uid,
-          type: c.type,
-          parent_id: c.parentId ?? null,
-          sort_order: maxOrder + 1
-        });
+        const { data, error } = await supabase
+          .from('categories')
+          .insert({
+            ...patch,
+            user_id: uid,
+            type: c.type,
+            parent_id: c.parentId ?? null,
+            sort_order: maxOrder + 1
+          })
+          .select('id')
+          .single();
         if (error) fail(error);
+        id = (data as { id: string }).id;
       }
       await loadMeta();
+      return id!;
     },
     [uid, categories, loadMeta]
   );
@@ -264,6 +284,7 @@ export function DataProvider({ uid, children }: { uid: string; children: ReactNo
 
   const saveGroup: DataCtx['saveGroup'] = useCallback(
     async (g) => {
+      let id = g.id;
       if (g.id) {
         const { error } = await supabase
           .from('category_groups')
@@ -273,19 +294,23 @@ export function DataProvider({ uid, children }: { uid: string; children: ReactNo
         if (error) fail(error);
       } else {
         const maxOrder = groups.reduce((m, x) => Math.max(m, x.order), 0);
-        const { error } = await supabase
+        const { data, error } = await supabase
           .from('category_groups')
-          .insert({ user_id: uid, name: g.name, emoji: g.emoji, sort_order: maxOrder + 1 });
+          .insert({ user_id: uid, name: g.name, emoji: g.emoji, sort_order: maxOrder + 1 })
+          .select('id')
+          .single();
         if (error) fail(error);
+        id = (data as { id: string }).id;
       }
       await loadMeta();
+      return id!;
     },
     [uid, groups, loadMeta]
   );
 
   const deleteGroup = useCallback(
     async (g: Group) => {
-      // Las categorías del grupo quedan sin grupo (no se borran)
+      // Los movimientos de la sección quedan "sin sección" (no se borran)
       const { error } = await supabase.from('category_groups').delete().eq('user_id', uid).eq('id', g.id);
       if (error) fail(error);
       await loadMeta();
@@ -302,7 +327,8 @@ export function DataProvider({ uid, children }: { uid: string; children: ReactNo
         place: r.place,
         day_of_month: r.dayOfMonth,
         start_date: r.startDate,
-        active: r.active
+        active: r.active,
+        section_id: r.sectionId
       };
       const { error } = r.id
         ? await supabase.from('recurring').update(row).eq('user_id', uid).eq('id', r.id)
@@ -436,6 +462,24 @@ export async function fetchUncategorizedCount(uid: string, type: TxType): Promis
     .eq('type', type)
     .is('category_id', null);
   return count ?? 0;
+}
+
+/* ---------- Sección usada por última vez ---------- */
+
+export function getLastSection(): string | null {
+  try {
+    return localStorage.getItem('last-section');
+  } catch {
+    return null;
+  }
+}
+export function setLastSection(id: string | null) {
+  try {
+    if (id) localStorage.setItem('last-section', id);
+    else localStorage.removeItem('last-section');
+  } catch {
+    /* noop */
+  }
 }
 
 /* ---------- Ayudas de categorías ---------- */
