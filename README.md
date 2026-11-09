@@ -2,7 +2,7 @@
 
 Web para organizar **gastos e ingresos personales** con cuenta propia: entras con tu correo desde cualquier dispositivo y ves tus datos. Interfaz en español, moneda USD, pensada primero para celular.
 
-Hecha con React + Vite + TypeScript y Supabase (Auth + Postgres). Estilo *liquid glass* claro y tranquilo (marfil, salvia y terracota) con Instrument Serif para títulos y cifras.
+Hecha con React + Vite + TypeScript y Supabase (Auth + Postgres). Estilo *liquid glass* claro y tranquilo (marfil, salvia y terracota) con Lora para títulos y cifras.
 
 ## Funciones
 
