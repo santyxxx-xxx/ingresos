@@ -1079,6 +1079,11 @@ p {
   color: var(--danger);
   background: transparent;
 }
+.btn-logout {
+  color: var(--danger);
+  background: rgba(164, 83, 63, 0.08);
+  border: 1px solid rgba(164, 83, 63, 0.22);
+}
 .btn-danger-solid {
   color: #fff;
   background: var(--danger);

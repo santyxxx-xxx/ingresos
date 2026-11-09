@@ -60,9 +60,9 @@ export function AccountSection() {
           </div>
         </div>
         <p className="cloud-meta" style={{ marginTop: 0 }}>
-          {a.email}
+          Conectado como <b>{a.email}</b>
         </p>
-        <button className="btn btn-danger" onClick={signOut}>
+        <button className="btn btn-logout" onClick={signOut}>
           <LogOut size={18} strokeWidth={1.75} />
           Cerrar sesión
         </button>
