@@ -6,6 +6,7 @@ import { AccountSection } from './AccountSection';
 import { useFeedback } from './Feedback';
 import { exportBackup, parseBackup, restoreBackup } from '../lib/backup';
 import type { ThemePref } from '../lib/hooks';
+import { useData } from '../lib/data';
 import { haptic } from '../lib/utils';
 
 interface Props {
@@ -17,15 +18,16 @@ interface Props {
 
 export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
   const { confirm, toast } = useFeedback();
+  const { uid, refresh } = useData();
   const fileRef = useRef<HTMLInputElement>(null);
 
   const doExport = async () => {
     try {
-      const r = await exportBackup();
+      const r = await exportBackup(uid);
       haptic(15);
       toast(r === 'shared' ? 'Respaldo listo' : 'Respaldo descargado');
     } catch (e) {
-      if ((e as DOMException)?.name !== 'AbortError') toast('No se pudo exportar');
+      if ((e as DOMException)?.name !== 'AbortError') toast((e as Error).message || 'No se pudo exportar', 'error');
     }
   };
 
@@ -35,12 +37,13 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
       const data = await parseBackup(file);
       const ok = await confirm({
         title: 'Importar respaldo',
-        message: `El archivo tiene ${data.transactions.length} movimientos y ${data.categories.length} categorías. Reemplazará todos los datos actuales de este dispositivo.`,
+        message: `El archivo tiene ${data.transactions.length} movimientos y ${data.categories.length} categorías. Reemplazará todos los datos de tu cuenta.`,
         confirmLabel: 'Importar',
         danger: true
       });
       if (!ok) return;
-      await restoreBackup(data);
+      await restoreBackup(uid, data);
+      refresh();
       haptic(15);
       toast('Respaldo importado');
       onClose();
@@ -76,7 +79,7 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
       <AccountSection />
 
       <div>
-        <span className="field-label">Respaldo en archivo</span>
+        <span className="field-label">Copia en archivo</span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button className="btn btn-ghost" onClick={doExport}>
             <Download size={19} strokeWidth={1.75} />
@@ -98,9 +101,8 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
 
       <p className="note" style={{ display: 'flex', gap: 8 }}>
         <ShieldCheck size={16} strokeWidth={1.75} style={{ flex: 'none', marginTop: 2 }} />
-        Con tu cuenta, tus datos se guardan en la nube y se sincronizan en todos tus dispositivos. La app también funciona
-        sin internet y sube los cambios cuando vuelve la conexión. Solo tú puedes ver tus datos. El archivo JSON es una
-        copia extra que puedes guardar donde quieras.
+        Tus datos viven en tu cuenta y solo tú puedes verlos. El archivo JSON es una copia extra que puedes guardar
+        donde quieras.
       </p>
     </Sheet>
   );

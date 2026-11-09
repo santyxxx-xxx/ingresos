@@ -3,7 +3,7 @@ import { Check, Trash2 } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { Segmented } from './Segmented';
 import { useFeedback } from './Feedback';
-import { countTxInCategory, deleteCategory, saveCategory } from '../lib/db';
+import { childrenOf, fetchCategoryUsage, useData } from '../lib/data';
 import type { Category, TxType } from '../lib/types';
 import { haptic } from '../lib/utils';
 
@@ -17,28 +17,37 @@ interface Props {
   onClose: () => void;
   editing: Category | null;
   defaultType: TxType;
+  /** Si viene, se crea una subcategoría dentro de esta categoría */
+  parent: Category | null;
 }
 
-export function CategorySheet({ open, onClose, editing, defaultType }: Props) {
+export function CategorySheet({ open, onClose, editing, defaultType, parent }: Props) {
+  const { uid, categories, catMap, saveCategory, deleteCategory } = useData();
   const { confirm, toast } = useFeedback();
   const [type, setType] = useState<TxType>(defaultType);
   const [name, setName] = useState('');
   const [emoji, setEmoji] = useState('🏷️');
   const [error, setError] = useState('');
+  const [saving, setSaving] = useState(false);
+
+  const editingParent = editing?.parentId ? catMap.get(editing.parentId) : undefined;
+  const isSub = !!parent || !!editing?.parentId;
 
   useEffect(() => {
     if (!open) return;
     setError('');
+    setSaving(false);
     if (editing) {
       setType(editing.type);
       setName(editing.name);
       setEmoji(editing.emoji);
     } else {
-      setType(defaultType);
+      const t = parent?.type ?? defaultType;
+      setType(t);
       setName('');
-      setEmoji(EMOJIS[defaultType][0]);
+      setEmoji(parent?.emoji ?? EMOJIS[t][0]);
     }
-  }, [open, editing, defaultType]);
+  }, [open, editing, defaultType, parent]);
 
   const submit = async () => {
     const n = name.trim();
@@ -47,35 +56,84 @@ export function CategorySheet({ open, onClose, editing, defaultType }: Props) {
       haptic([20, 40, 20]);
       return;
     }
-    const e = emoji.trim() || '🏷️';
-    await saveCategory({ id: editing?.id, name: n, emoji: e, type });
-    haptic(15);
-    toast(editing ? 'Categoría actualizada' : 'Categoría creada');
-    onClose();
+    setSaving(true);
+    try {
+      await saveCategory({
+        id: editing?.id,
+        name: n,
+        emoji: emoji.trim() || '🏷️',
+        type,
+        parentId: editing ? undefined : parent?.id ?? null
+      });
+      haptic(15);
+      toast(editing ? 'Guardado' : isSub ? 'Subcategoría creada' : 'Categoría creada');
+      onClose();
+    } catch (e) {
+      setSaving(false);
+      setError((e as Error).message);
+    }
   };
 
   const remove = async () => {
     if (!editing) return;
-    const count = await countTxInCategory(editing.id);
+    const usage = await fetchCategoryUsage(uid);
+    const subs = editing.parentId ? [] : childrenOf(categories, editing.id);
+    const own = usage.get(editing.id) ?? 0;
+    const inSubs = subs.reduce((a, s) => a + (usage.get(s.id) ?? 0), 0);
+    const total = own + inSubs;
+    const mov = (n: number) => `${n} movimiento${n === 1 ? '' : 's'}`;
+
+    let message: string;
+    if (editing.parentId) {
+      message =
+        own > 0
+          ? `Tiene ${mov(own)}. No se pierden: pasan a “${editingParent?.name ?? 'la categoría principal'}”.`
+          : 'Esta subcategoría no tiene movimientos.';
+    } else {
+      const parts: string[] = [];
+      if (subs.length) parts.push(`También se borrarán sus ${subs.length} subcategoría${subs.length === 1 ? '' : 's'}.`);
+      parts.push(
+        total > 0
+          ? `Sus ${mov(total)} no se pierden: pasan a “Sin categoría”.`
+          : 'No tiene movimientos.'
+      );
+      message = parts.join(' ');
+    }
+
     const ok = await confirm({
       title: `Borrar “${editing.name}”`,
-      message:
-        count > 0
-          ? `Tiene ${count} movimiento${count === 1 ? '' : 's'}. No se perderán: pasarán a “Sin categoría”.`
-          : 'Esta categoría no tiene movimientos. Se eliminará de forma permanente.',
-      confirmLabel: 'Borrar categoría',
+      message,
+      confirmLabel: 'Borrar',
       danger: true
     });
     if (!ok) return;
-    await deleteCategory(editing.id);
-    haptic([10, 30, 10]);
-    toast('Categoría borrada');
-    onClose();
+    try {
+      await deleteCategory(editing);
+      haptic([10, 30, 10]);
+      toast(editing.parentId ? 'Subcategoría borrada' : 'Categoría borrada');
+      onClose();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    }
   };
 
+  const title = editing
+    ? editing.parentId
+      ? 'Editar subcategoría'
+      : 'Editar categoría'
+    : parent
+      ? `Nueva subcategoría`
+      : 'Nueva categoría';
+
   return (
-    <Sheet open={open} onClose={onClose} title={editing ? 'Editar categoría' : 'Nueva categoría'}>
-      {!editing && (
+    <Sheet open={open} onClose={onClose} title={title}>
+      {(parent || editingParent) && (
+        <p className="note" style={{ marginTop: -6 }}>
+          Dentro de <b>{(parent ?? editingParent)!.emoji} {(parent ?? editingParent)!.name}</b>
+        </p>
+      )}
+
+      {!editing && !parent && (
         <Segmented
           value={type}
           tone={type}
@@ -111,9 +169,9 @@ export function CategorySheet({ open, onClose, editing, defaultType }: Props) {
           <input
             id="cat-name"
             className="input"
-            placeholder="Ej. Mascotas"
+            placeholder={isSub ? 'Ej. Supermercado' : 'Ej. Mascotas'}
             value={name}
-            maxLength={28}
+            maxLength={40}
             autoCapitalize="sentences"
             enterKeyHint="done"
             onChange={(e) => {
@@ -135,14 +193,14 @@ export function CategorySheet({ open, onClose, editing, defaultType }: Props) {
 
       {error && <p className="error-text">{error}</p>}
 
-      <button className="btn btn-primary" onClick={submit}>
+      <button className="btn btn-primary" onClick={submit} disabled={saving}>
         <Check size={20} strokeWidth={2} />
-        {editing ? 'Guardar cambios' : 'Crear categoría'}
+        {saving ? 'Guardando…' : editing ? 'Guardar cambios' : isSub ? 'Crear subcategoría' : 'Crear categoría'}
       </button>
       {editing && (
         <button className="btn btn-danger" onClick={remove}>
           <Trash2 size={18} strokeWidth={1.75} />
-          Borrar categoría
+          {editing.parentId ? 'Borrar subcategoría' : 'Borrar categoría'}
         </button>
       )}
     </Sheet>

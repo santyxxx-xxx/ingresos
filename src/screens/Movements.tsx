@@ -3,7 +3,7 @@ import { Header } from '../components/Header';
 import { MonthPicker } from '../components/MonthPicker';
 import { Segmented } from '../components/Segmented';
 import { TxRow } from '../components/TxRow';
-import { useCategories, useMonthTx } from '../lib/hooks';
+import { useData, useMonthTx } from '../lib/data';
 import type { Transaction } from '../lib/types';
 import { dayLabel, money } from '../lib/utils';
 
@@ -17,14 +17,14 @@ interface Props {
 }
 
 export function Movements({ month, setMonth, onEdit, onSettings }: Props) {
-  const txs = useMonthTx(month);
-  const { map: cats } = useCategories();
+  const { data: txs, error } = useMonthTx(month);
+  const { catMap: cats } = useData();
   const [filter, setFilter] = useState<Filter>('all');
 
   const { groups, income, expense } = useMemo(() => {
     const list = (txs ?? [])
       .filter((t) => filter === 'all' || t.type === filter)
-      .sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1));
+      .sort((a, b) => (a.date === b.date ? b.createdAt.localeCompare(a.createdAt) : a.date < b.date ? 1 : -1));
     const g: Array<{ date: string; items: Transaction[]; net: number }> = [];
     let inc = 0;
     let exp = 0;
@@ -55,6 +55,8 @@ export function Movements({ month, setMonth, onEdit, onSettings }: Props) {
           { value: 'income', label: 'Ingresos' }
         ]}
       />
+
+      {error && <p className="error-text">{error}</p>}
 
       <div className="summary-line">
         {filter !== 'expense' && (

@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useRef, useState, type ReactNode } from 'react';
-import { CheckCircle2 } from 'lucide-react';
+import { AlertCircle, CheckCircle2 } from 'lucide-react';
 import { Sheet } from './Sheet';
 
 interface ConfirmOptions {
@@ -11,7 +11,7 @@ interface ConfirmOptions {
 
 interface Ctx {
   confirm: (o: ConfirmOptions) => Promise<boolean>;
-  toast: (msg: string) => void;
+  toast: (msg: string, kind?: 'ok' | 'error') => void;
 }
 
 const FeedbackCtx = createContext<Ctx | null>(null);
@@ -27,7 +27,7 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const resolver = useRef<((v: boolean) => void) | null>(null);
 
-  const [toastMsg, setToastMsg] = useState<{ id: number; text: string; out: boolean } | null>(null);
+  const [toastMsg, setToastMsg] = useState<{ id: number; text: string; out: boolean; kind: 'ok' | 'error' } | null>(null);
   const toastTimer = useRef<number[]>([]);
 
   const confirm = useCallback((o: ConfirmOptions) => {
@@ -44,13 +44,13 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
     resolver.current = null;
   }, []);
 
-  const toast = useCallback((text: string) => {
+  const toast = useCallback((text: string, kind: 'ok' | 'error' = 'ok') => {
     toastTimer.current.forEach(clearTimeout);
     const id = Date.now();
-    setToastMsg({ id, text, out: false });
+    setToastMsg({ id, text, out: false, kind });
     toastTimer.current = [
-      window.setTimeout(() => setToastMsg((t) => (t && t.id === id ? { ...t, out: true } : t)), 1900),
-      window.setTimeout(() => setToastMsg((t) => (t && t.id === id ? null : t)), 2250)
+      window.setTimeout(() => setToastMsg((t) => (t && t.id === id ? { ...t, out: true } : t)), kind === 'error' ? 3800 : 1900),
+      window.setTimeout(() => setToastMsg((t) => (t && t.id === id ? null : t)), kind === 'error' ? 4150 : 2250)
     ];
   }, []);
 
@@ -73,8 +73,8 @@ export function FeedbackProvider({ children }: { children: ReactNode }) {
       </Sheet>
       {toastMsg && (
         <div className="toast-host" aria-live="polite">
-          <div key={toastMsg.id} className={`toast glass glass-strong ${toastMsg.out ? 'out' : ''}`}>
-            <CheckCircle2 size={18} strokeWidth={2} />
+          <div key={toastMsg.id} className={`toast glass glass-strong ${toastMsg.kind} ${toastMsg.out ? 'out' : ''}`}>
+            {toastMsg.kind === 'error' ? <AlertCircle size={18} strokeWidth={2} /> : <CheckCircle2 size={18} strokeWidth={2} />}
             {toastMsg.text}
           </div>
         </div>

@@ -1,12 +1,11 @@
-import { useMemo } from 'react';
-import { ArrowDownRight, ArrowUpRight, Plus } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Plus } from 'lucide-react';
 import { Header } from '../components/Header';
 import { MonthPicker } from '../components/MonthPicker';
 import { Donut, type Slice } from '../components/Donut';
 import { TxRow } from '../components/TxRow';
-import { AccountBanner } from '../components/AccountBanner';
-import { catInfo, useCategories, useMonthTx } from '../lib/hooks';
-import type { Transaction } from '../lib/types';
+import { UNCATEGORIZED, useData, useMonthTx } from '../lib/data';
+import type { Category, Transaction } from '../lib/types';
 import { money, moneyParts, normalizePlace } from '../lib/utils';
 
 interface Props {
@@ -19,6 +18,7 @@ interface Props {
 }
 
 const COLORS = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)', 'var(--c6)'];
+const NONE = '__none__';
 
 function greeting() {
   const h = new Date().getHours();
@@ -27,52 +27,145 @@ function greeting() {
   return 'Buenas noches';
 }
 
+interface RankItem {
+  id: string;
+  name: string;
+  emoji: string;
+  value: number;
+  pct: number;
+  children: Array<{ id: string; name: string; emoji: string; value: number; pct: number }>;
+}
+
+/** Agrupa por categoría principal, con el desglose por subcategoría */
+function rankByRoot(list: Transaction[], catMap: Map<string, Category>, total: number): RankItem[] {
+  const roots = new Map<string, { value: number; children: Map<string, number> }>();
+  for (const t of list) {
+    const c = t.categoryId ? catMap.get(t.categoryId) : undefined;
+    const rootId = c ? c.parentId ?? c.id : NONE;
+    const childId = c && c.parentId ? c.id : rootId === NONE ? NONE : `${rootId}:general`;
+    const r = roots.get(rootId) ?? { value: 0, children: new Map() };
+    r.value += t.amount;
+    r.children.set(childId, (r.children.get(childId) ?? 0) + t.amount);
+    roots.set(rootId, r);
+  }
+  return [...roots.entries()]
+    .map(([id, r]) => {
+      const root = catMap.get(id);
+      const children = [...r.children.entries()]
+        .map(([cid, value]) => {
+          const sub = catMap.get(cid);
+          return {
+            id: cid,
+            name: sub ? sub.name : 'General',
+            emoji: sub ? sub.emoji : root?.emoji ?? UNCATEGORIZED.emoji,
+            value,
+            pct: r.value ? (value / r.value) * 100 : 0
+          };
+        })
+        .sort((a, b) => b.value - a.value);
+      return {
+        id,
+        name: root?.name ?? UNCATEGORIZED.name,
+        emoji: root?.emoji ?? UNCATEGORIZED.emoji,
+        value: r.value,
+        pct: total ? (r.value / total) * 100 : 0,
+        // el desglose solo tiene sentido si hay alguna subcategoría con movimientos
+        children: children.some((c) => !c.id.endsWith(':general') && c.id !== NONE) ? children : []
+      };
+    })
+    .sort((a, b) => b.value - a.value);
+}
+
+function RankList({ items, colorFor, tone }: { items: RankItem[]; colorFor: (i: number) => string; tone?: 'income' }) {
+  const [open, setOpen] = useState<Set<string>>(new Set());
+  const toggle = (id: string) =>
+    setOpen((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  return (
+    <div className="rank-list">
+      {items.map((r, i) => {
+        const expandable = r.children.length > 0;
+        const isOpen = open.has(r.id);
+        const row = (
+          <div className="rank">
+            <span className="badge">{r.emoji}</span>
+            <span className="name">
+              {r.name}
+              {expandable && <ChevronRight size={14} strokeWidth={2} className={`caret ${isOpen ? 'open' : ''}`} />}
+            </span>
+            <span className={`amt ${tone === 'income' ? 'c-income' : ''}`}>{money(r.value)}</span>
+            <div className="bar">
+              <span style={{ width: `${r.pct}%`, background: colorFor(i) }} />
+            </div>
+            <span className="sub">{r.pct.toFixed(1)}%</span>
+          </div>
+        );
+        return (
+          <div key={r.id}>
+            {expandable ? (
+              <button className="rank-toggle" onClick={() => toggle(r.id)} aria-expanded={isOpen}>
+                {row}
+              </button>
+            ) : (
+              row
+            )}
+            {expandable && isOpen && (
+              <div className="rank-list" style={{ marginTop: 12, gap: 10 }}>
+                {r.children.map((c) => (
+                  <div className="rank child" key={c.id}>
+                    <span className="badge small">{c.emoji}</span>
+                    <span className="name">{c.name}</span>
+                    <span className="amt">{money(c.value)}</span>
+                    <div className="bar">
+                      <span style={{ width: `${c.pct}%`, background: colorFor(i), opacity: 0.6 }} />
+                    </div>
+                    <span className="sub">{c.pct.toFixed(0)}%</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings }: Props) {
-  const txs = useMonthTx(month);
-  const { map: cats } = useCategories();
+  const { data: txs, error, loading } = useMonthTx(month);
+  const { catMap } = useData();
 
   const data = useMemo(() => {
     const list = txs ?? [];
-    let income = 0;
-    let expense = 0;
-    const byCat = new Map<string, number>();
-    const byIncomeCat = new Map<string, number>();
+    const incomes = list.filter((t) => t.type === 'income');
+    const expenses = list.filter((t) => t.type === 'expense');
+    const income = incomes.reduce((a, t) => a + t.amount, 0);
+    const expense = expenses.reduce((a, t) => a + t.amount, 0);
     const byPlace = new Map<string, { label: string; total: number; n: number }>();
-    for (const t of list) {
-      const key = t.categoryId ?? '__none__';
-      if (t.type === 'income') {
-        income += t.amount;
-        byIncomeCat.set(key, (byIncomeCat.get(key) ?? 0) + t.amount);
-      } else {
-        expense += t.amount;
-        byCat.set(key, (byCat.get(key) ?? 0) + t.amount);
-        if (t.place.trim()) {
-          const pk = normalizePlace(t.place);
-          const cur = byPlace.get(pk);
-          if (cur) {
-            cur.total += t.amount;
-            cur.n++;
-          } else byPlace.set(pk, { label: t.place.trim(), total: t.amount, n: 1 });
-        }
-      }
+    for (const t of expenses) {
+      if (!t.place.trim()) continue;
+      const pk = normalizePlace(t.place);
+      const cur = byPlace.get(pk);
+      if (cur) {
+        cur.total += t.amount;
+        cur.n++;
+      } else byPlace.set(pk, { label: t.place.trim(), total: t.amount, n: 1 });
     }
-    const toRank = (m: Map<string, number>, total: number) =>
-      [...m.entries()]
-        .sort((a, b) => b[1] - a[1])
-        .map(([id, value]) => ({
-          id,
-          value,
-          pct: total ? (value / total) * 100 : 0,
-          ...catInfo(cats, id === '__none__' ? null : id)
-        }));
-    const expenseRank = toRank(byCat, expense);
-    const incomeRank = toRank(byIncomeCat, income);
-    const places = [...byPlace.values()].sort((a, b) => b.total - a.total).slice(0, 5);
-    const recent = [...list]
-      .sort((a, b) => (a.date === b.date ? b.createdAt - a.createdAt : a.date < b.date ? 1 : -1))
-      .slice(0, 5);
-    return { income, expense, balance: income - expense, expenseRank, incomeRank, places, recent, count: list.length };
-  }, [txs, cats]);
+    return {
+      income,
+      expense,
+      balance: income - expense,
+      expenseRank: rankByRoot(expenses, catMap, expense),
+      incomeRank: rankByRoot(incomes, catMap, income),
+      places: [...byPlace.values()].sort((a, b) => b.total - a.total).slice(0, 5),
+      recent: list.slice(0, 5),
+      count: list.length
+    };
+  }, [txs, catMap]);
 
   const slices: Slice[] = useMemo(() => {
     const top = data.expenseRank.slice(0, 5).map((r, i) => ({ key: r.id, value: r.value, color: COLORS[i] }));
@@ -83,15 +176,16 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
 
   const bal = moneyParts(data.balance);
   const maxPlace = data.places[0]?.total ?? 1;
-  const maxIncome = data.incomeRank[0]?.value ?? 1;
+  const dim = loading && txs === undefined ? 'loading-dim' : '';
 
   return (
     <div className="screen-inner">
       <Header eyebrow={greeting()} title="Resumen" onSettings={onSettings} />
-      <AccountBanner onOpen={onSettings} />
       <MonthPicker month={month} onChange={setMonth} />
 
-      <section className="card glass balance">
+      {error && <p className="error-text">{error}</p>}
+
+      <section className={`card glass balance ${dim}`}>
         <div className="k">Balance del mes</div>
         <div className={`big-number ${data.balance < 0 ? 'neg' : ''}`}>
           {bal.sign}
@@ -100,7 +194,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
         </div>
       </section>
 
-      <div className="stat-row">
+      <div className={`stat-row ${dim}`}>
         <div className="stat glass income">
           <div className="top">
             <span className="dot">
@@ -154,19 +248,14 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
               })}
             </div>
           </div>
-          <div className="rank-list" style={{ marginTop: 20 }}>
-            {data.expenseRank.map((r, i) => (
-              <div className="rank" key={r.id}>
-                <span className="badge">{r.emoji}</span>
-                <span className="name">{r.name}</span>
-                <span className="amt">{money(r.value)}</span>
-                <div className="bar">
-                  <span style={{ width: `${r.pct}%`, background: i < 5 ? COLORS[i] : 'var(--c7)' }} />
-                </div>
-                <span className="sub">{r.pct.toFixed(1)}%</span>
-              </div>
-            ))}
+          <div style={{ marginTop: 20 }}>
+            <RankList items={data.expenseRank} colorFor={(i) => (i < 5 ? COLORS[i] : 'var(--c7)')} />
           </div>
+          {data.expenseRank.some((r) => r.children.length > 0) && (
+            <p className="note" style={{ marginTop: 14 }}>
+              Toca una categoría para ver sus subcategorías.
+            </p>
+          )}
         </section>
       )}
 
@@ -198,19 +287,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
           <div className="card-title">
             <h2>Ingresos del mes</h2>
           </div>
-          <div className="rank-list">
-            {data.incomeRank.map((r) => (
-              <div className="rank" key={r.id}>
-                <span className="badge">{r.emoji}</span>
-                <span className="name">{r.name}</span>
-                <span className="amt c-income">{money(r.value)}</span>
-                <div className="bar">
-                  <span style={{ width: `${(r.value / maxIncome) * 100}%`, background: 'var(--accent-ink)' }} />
-                </div>
-                <span className="sub">{r.pct.toFixed(1)}%</span>
-              </div>
-            ))}
-          </div>
+          <RankList items={data.incomeRank} colorFor={() => 'var(--accent-ink)'} tone="income" />
         </section>
       )}
 
@@ -224,7 +301,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
           </div>
           <div className="tx-list">
             {data.recent.map((t) => (
-              <TxRow key={t.id} tx={t} cats={cats} onClick={() => onEdit(t)} showDate />
+              <TxRow key={t.id} tx={t} cats={catMap} onClick={() => onEdit(t)} showDate />
             ))}
           </div>
         </section>

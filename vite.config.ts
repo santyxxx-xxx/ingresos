@@ -6,6 +6,9 @@ export default defineConfig({
   plugins: [
     react(),
     VitePWA({
+      // La app ya no funciona offline: este service worker se autodestruye y borra
+      // la caché de la versión PWA anterior en los dispositivos que la tenían.
+      selfDestroying: true,
       registerType: 'autoUpdate',
       injectRegister: 'auto',
       includeAssets: ['icons/favicon.png', 'icons/apple-touch-icon.png'],
@@ -13,7 +16,7 @@ export default defineConfig({
         id: '/',
         name: 'Ingresos · Gastos e ingresos',
         short_name: 'Ingresos',
-        description: 'Organiza tus gastos e ingresos personales, sin conexión y sin cuentas.',
+        description: 'Organiza tus gastos e ingresos personales.',
         lang: 'es',
         dir: 'ltr',
         start_url: '/',

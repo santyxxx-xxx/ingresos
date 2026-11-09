@@ -1,5 +1,5 @@
 import type { Category, Transaction } from '../lib/types';
-import { catInfo } from '../lib/hooks';
+import { catInfo } from '../lib/data';
 import { money, shortDate } from '../lib/utils';
 
 export function TxRow({ tx, cats, onClick, showDate }: {
@@ -16,7 +16,7 @@ export function TxRow({ tx, cats, onClick, showDate }: {
       <span className="info">
         <span className="title">{tx.place || c.name}</span>
         <span className="meta">
-          {tx.place ? c.name : tx.type === 'income' ? 'Ingreso' : 'Gasto'}
+          {tx.place ? c.full : tx.type === 'income' ? 'Ingreso' : 'Gasto'}
           {showDate && ` · ${shortDate(tx.date)}`}
         </span>
       </span>

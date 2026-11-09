@@ -1,8 +1,9 @@
 import { useCallback, useRef, useState } from 'react';
 import { ArrowLeftRight, PieChart, Plus, Tags } from 'lucide-react';
 import { FeedbackProvider } from './components/Feedback';
-import { AccountProvider, useAccount, useSkipLogin } from './lib/account';
-import { Welcome } from './components/Welcome';
+import { AccountProvider, useAccount } from './lib/account';
+import { DataProvider } from './lib/data';
+import { Login } from './components/Login';
 import { TransactionSheet } from './components/TransactionSheet';
 import { CategorySheet } from './components/CategorySheet';
 import { SettingsSheet } from './components/SettingsSheet';
@@ -32,10 +33,14 @@ export default function App() {
 
 function Gate() {
   const account = useAccount();
-  const [skip, setSkip] = useSkipLogin();
-  if (account.enabled && !account.ready) return <div className="backdrop-art" aria-hidden="true" />;
-  if (account.enabled && !account.session && !skip) return <Welcome onSkip={() => setSkip(true)} />;
-  return <Shell />;
+  if (!account.ready) return <div className="backdrop-art" aria-hidden="true" />;
+  if (!account.session) return <Login />;
+  const uid = account.session.user.id;
+  return (
+    <DataProvider key={uid} uid={uid}>
+      <Shell />
+    </DataProvider>
+  );
 }
 
 function Shell() {
@@ -49,11 +54,12 @@ function Shell() {
     editing: null,
     type: 'expense'
   });
-  const [catSheet, setCatSheet] = useState<{ open: boolean; editing: Category | null; type: TxType }>({
-    open: false,
-    editing: null,
-    type: 'expense'
-  });
+  const [catSheet, setCatSheet] = useState<{
+    open: boolean;
+    editing: Category | null;
+    type: TxType;
+    parent: Category | null;
+  }>({ open: false, editing: null, type: 'expense', parent: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const screenRef = useRef<HTMLDivElement>(null);
 
@@ -108,8 +114,8 @@ function Shell() {
             )}
             {tab === 'cats' && (
               <Categories
-                onEdit={(c) => setCatSheet({ open: true, editing: c, type: c.type })}
-                onNew={(type) => setCatSheet({ open: true, editing: null, type })}
+                onEdit={(c) => setCatSheet({ open: true, editing: c, type: c.type, parent: null })}
+                onNew={(type, parent) => setCatSheet({ open: true, editing: null, type, parent })}
                 onSettings={openSettings}
               />
             )}
@@ -133,7 +139,13 @@ function Shell() {
       </div>
 
       <TransactionSheet open={txSheet.open} onClose={closeTx} editing={txSheet.editing} defaultType={txSheet.type} />
-      <CategorySheet open={catSheet.open} onClose={closeCat} editing={catSheet.editing} defaultType={catSheet.type} />
+      <CategorySheet
+        open={catSheet.open}
+        onClose={closeCat}
+        editing={catSheet.editing}
+        defaultType={catSheet.type}
+        parent={catSheet.parent}
+      />
       <SettingsSheet open={settingsOpen} onClose={closeSettings} theme={theme} setTheme={setTheme} />
     </>
   );

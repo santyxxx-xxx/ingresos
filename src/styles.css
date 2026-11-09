@@ -1150,6 +1150,73 @@ p {
   color: var(--ink-3);
   margin-top: 2px;
 }
+.list-row.sub {
+  min-height: 52px;
+  padding-left: 22px;
+}
+.list-row.sub .title {
+  font-size: 15px;
+  font-weight: 550;
+}
+.list-row.add .title {
+  color: var(--accent-ink);
+  font-weight: 600;
+}
+.list-row.add .badge {
+  color: var(--accent-ink);
+}
+.badge.small {
+  width: 32px;
+  height: 32px;
+  border-radius: 11px;
+  font-size: 16px;
+}
+.sub-picker {
+  margin-top: -6px;
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: var(--field);
+  border: 1px solid var(--glass-border);
+  animation: in-fade 0.3s var(--ease-out) both;
+}
+.sub-picker .chip {
+  background: var(--glass-strong);
+}
+.sub-picker .chip[aria-pressed='true'] {
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.rank.child {
+  grid-template-columns: 40px 1fr auto;
+  padding-left: 14px;
+}
+.rank.child .name {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+.rank.child .amt {
+  font-size: 14px;
+  font-weight: 600;
+}
+.rank-toggle {
+  width: 100%;
+  text-align: left;
+}
+.rank .name .caret {
+  display: inline-block;
+  margin-left: 6px;
+  color: var(--ink-3);
+  transition: transform 0.25s var(--ease-out);
+  vertical-align: -2px;
+}
+.rank .name .caret.open {
+  transform: rotate(90deg);
+}
+.loading-dim {
+  opacity: 0.45;
+  transition: opacity 0.3s;
+}
 .list-row .chev {
   color: var(--ink-3);
 }
@@ -1358,6 +1425,13 @@ p {
 }
 .toast svg {
   color: var(--accent-ink);
+  flex: none;
+}
+.toast {
+  max-width: calc(100vw - 32px);
+}
+.toast.error svg {
+  color: var(--danger);
 }
 @keyframes toast-in {
   from {

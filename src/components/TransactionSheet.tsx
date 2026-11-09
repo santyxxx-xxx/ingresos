@@ -1,11 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLiveQuery } from 'dexie-react-hooks';
 import { Check, Trash2 } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { Segmented } from './Segmented';
 import { useFeedback } from './Feedback';
-import { db, deleteTransaction, saveTransaction } from '../lib/db';
-import { useCategories } from '../lib/hooks';
+import { childrenOf, fetchPlaces, topLevel, useData } from '../lib/data';
 import type { Transaction, TxType } from '../lib/types';
 import { centsToInput, haptic, normalizePlace, parseAmount, toISODate, todayISO } from '../lib/utils';
 
@@ -23,7 +21,7 @@ function yesterdayISO() {
 }
 
 export function TransactionSheet({ open, onClose, editing, defaultType }: Props) {
-  const { list: cats } = useCategories();
+  const { uid, categories, catMap, saveTransaction, deleteTransaction } = useData();
   const { confirm, toast } = useFeedback();
   const [type, setType] = useState<TxType>(defaultType);
   const [amount, setAmount] = useState('');
@@ -32,9 +30,9 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
   const [date, setDate] = useState(todayISO());
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
+  const [places, setPlaces] = useState<string[]>([]);
   const amountRef = useRef<HTMLInputElement>(null);
 
-  // Reinicia el formulario cada vez que se abre
   useEffect(() => {
     if (!open) return;
     setError('');
@@ -56,34 +54,27 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
     }
   }, [open, editing, defaultType]);
 
-  const typeCats = useMemo(() => cats.filter((c) => c.type === type), [cats, type]);
+  useEffect(() => {
+    if (open) fetchPlaces(uid, type).then(setPlaces);
+  }, [open, uid, type]);
 
-  // Lugares usados antes, ordenados por frecuencia
-  const allPlaces = useLiveQuery(async () => {
-    if (!open) return [] as string[];
-    const freq = new Map<string, { label: string; n: number }>();
-    await db.transactions.each((t) => {
-      if (!t.place || t.deleted) return;
-      const k = normalizePlace(t.place);
-      const cur = freq.get(k);
-      if (cur) cur.n++;
-      else freq.set(k, { label: t.place.trim(), n: 1 });
-    });
-    return [...freq.values()].sort((a, b) => b.n - a.n).map((x) => x.label);
-  }, [open]);
+  const roots = useMemo(() => topLevel(categories, type), [categories, type]);
+  const selected = categoryId ? catMap.get(categoryId) : undefined;
+  const selectedRootId = selected ? selected.parentId ?? selected.id : null;
+  const subs = useMemo(
+    () => (selectedRootId ? childrenOf(categories, selectedRootId) : []),
+    [categories, selectedRootId]
+  );
 
   const suggestions = useMemo(() => {
     const q = normalizePlace(place);
-    return (allPlaces ?? [])
-      .filter((p) => (q ? normalizePlace(p).includes(q) && normalizePlace(p) !== q : true))
-      .slice(0, 6);
-  }, [allPlaces, place]);
+    return places.filter((p) => (q ? normalizePlace(p).includes(q) && normalizePlace(p) !== q : true)).slice(0, 6);
+  }, [places, place]);
 
   const changeType = (t: TxType) => {
     haptic(6);
     setType(t);
-    const cur = cats.find((c) => c.id === categoryId);
-    if (cur && cur.type !== t) setCategoryId(null);
+    if (selected && selected.type !== t) setCategoryId(null);
   };
 
   const submit = async () => {
@@ -94,7 +85,7 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
       return;
     }
     const keepsUncategorized = editing && editing.categoryId === null && categoryId === null;
-    if (!categoryId && typeCats.length > 0 && !keepsUncategorized) {
+    if (!categoryId && roots.length > 0 && !keepsUncategorized) {
       setError('Elige una categoría');
       haptic([20, 40, 20]);
       return;
@@ -104,17 +95,15 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
       return;
     }
     setSaving(true);
-    await saveTransaction({
-      id: editing?.id,
-      type,
-      amount: cents,
-      categoryId,
-      place: place.trim(),
-      date
-    });
-    haptic(15);
-    toast(editing ? 'Movimiento actualizado' : type === 'income' ? 'Ingreso guardado' : 'Gasto guardado');
-    onClose();
+    try {
+      await saveTransaction({ id: editing?.id, type, amount: cents, categoryId, place: place.trim(), date });
+      haptic(15);
+      toast(editing ? 'Movimiento actualizado' : type === 'income' ? 'Ingreso guardado' : 'Gasto guardado');
+      onClose();
+    } catch (e) {
+      setSaving(false);
+      setError((e as Error).message);
+    }
   };
 
   const remove = async () => {
@@ -126,10 +115,14 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
       danger: true
     });
     if (!ok) return;
-    await deleteTransaction(editing.id);
-    haptic([10, 30, 10]);
-    toast('Movimiento borrado');
-    onClose();
+    try {
+      await deleteTransaction(editing.id);
+      haptic([10, 30, 10]);
+      toast('Movimiento borrado');
+      onClose();
+    } catch (e) {
+      toast((e as Error).message, 'error');
+    }
   };
 
   return (
@@ -164,12 +157,12 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
       <div>
         <span className="field-label">Categoría</span>
         <div className="chips">
-          {typeCats.map((c) => (
+          {roots.map((c) => (
             <button
               key={c.id}
               type="button"
               className={`chip ${type}`}
-              aria-pressed={categoryId === c.id}
+              aria-pressed={selectedRootId === c.id}
               onClick={() => {
                 haptic(5);
                 setError('');
@@ -190,11 +183,44 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
               <span className="e">❔</span>Sin categoría
             </button>
           )}
-          {typeCats.length === 0 && (
-            <p className="note">No tienes categorías de {type === 'income' ? 'ingreso' : 'gasto'}. Puedes crearlas en la pestaña Categorías.</p>
+          {roots.length === 0 && (
+            <p className="note">
+              No tienes categorías de {type === 'income' ? 'ingreso' : 'gasto'}. Puedes crearlas en la pestaña Categorías.
+            </p>
           )}
         </div>
       </div>
+
+      {subs.length > 0 && selectedRootId && (
+        <div className="sub-picker">
+          <span className="field-label">Subcategoría</span>
+          <div className="chips">
+            <button
+              type="button"
+              className="chip small"
+              aria-pressed={categoryId === selectedRootId}
+              onClick={() => setCategoryId(selectedRootId)}
+            >
+              General
+            </button>
+            {subs.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                className="chip small"
+                aria-pressed={categoryId === s.id}
+                onClick={() => {
+                  haptic(5);
+                  setCategoryId(s.id);
+                }}
+              >
+                <span className="e">{s.emoji}</span>
+                {s.name}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div>
         <label className="field-label" htmlFor="tx-place">
@@ -241,7 +267,7 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
 
       <button className="btn btn-primary" onClick={submit} disabled={saving}>
         <Check size={20} strokeWidth={2} />
-        {editing ? 'Guardar cambios' : 'Guardar'}
+        {saving ? 'Guardando…' : editing ? 'Guardar cambios' : 'Guardar'}
       </button>
       {editing && (
         <button className="btn btn-danger" onClick={remove}>

@@ -1,6 +1,6 @@
 import { AuthForm } from './AuthForm';
 
-export function Welcome({ onSkip }: { onSkip: () => void }) {
+export function Login() {
   return (
     <>
       <div className="backdrop-art" aria-hidden="true">
@@ -13,15 +13,10 @@ export function Welcome({ onSkip }: { onSkip: () => void }) {
         <div className="welcome-inner anim-fade">
           <img src="/icons/icon-192.png" alt="" className="welcome-logo" width={72} height={72} />
           <h1>Ingresos</h1>
-          <p className="welcome-sub">
-            Tus gastos e ingresos, claros. Crea tu cuenta y tus datos estarán en todos tus dispositivos.
-          </p>
+          <p className="welcome-sub">Tus gastos e ingresos, claros. Entra y mira tus datos desde cualquier dispositivo.</p>
           <div className="card glass">
             <AuthForm />
           </div>
-          <button className="welcome-skip" onClick={onSkip}>
-            Usar sin cuenta (solo en este dispositivo)
-          </button>
         </div>
       </div>
     </>
