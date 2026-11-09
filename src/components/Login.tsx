@@ -1,5 +1,9 @@
 import { AuthForm, GoogleButton } from './AuthForm';
 
+// El botón de Google aparece solo si en Vercel se define VITE_ENABLE_GOOGLE=true
+// (después de activar Google en Supabase → Authentication → Providers).
+const GOOGLE_ENABLED = import.meta.env.VITE_ENABLE_GOOGLE === 'true';
+
 export function Login() {
   return (
     <>
@@ -14,10 +18,14 @@ export function Login() {
           <h1>Ingresos</h1>
           <p className="welcome-sub">Tus gastos e ingresos en orden, desde cualquier dispositivo.</p>
           <div className="card glass auth-card">
-            <GoogleButton />
-            <div className="divider">
-              <span>o con tu correo</span>
-            </div>
+            {GOOGLE_ENABLED && (
+              <>
+                <GoogleButton />
+                <div className="divider">
+                  <span>o con tu correo</span>
+                </div>
+              </>
+            )}
             <AuthForm />
           </div>
         </div>

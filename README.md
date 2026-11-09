@@ -52,7 +52,7 @@ Proyecto **Ingresos**. Las migraciones están en `supabase/migrations/` y se apl
 
 - *Authentication → URL Configuration*: **Site URL** = dominio de producción de Vercel; en **Redirect URLs** agrega ese dominio con `/**`.
 - Correo: desactiva **Confirm email** si no quieres confirmar cuentas (*Authentication → Sign In / Providers → Email*).
-- Google: crea un cliente OAuth (tipo “Aplicación web”) en Google Cloud con la URI de redirección `https://qebcqxfkwbxvezdqffwq.supabase.co/auth/v1/callback`, y pega el Client ID y Secret en *Authentication → Sign In / Providers → Google*.
+- Google (opcional, gratis): crea un cliente OAuth (tipo “Aplicación web”) en Google Cloud con la URI de redirección `https://qebcqxfkwbxvezdqffwq.supabase.co/auth/v1/callback`, y pega el Client ID y Secret en *Authentication → Sign In / Providers → Google*. Luego agrega en Vercel la variable `VITE_ENABLE_GOOGLE=true` y redespliega para mostrar el botón.
 
 ## Estructura
 
