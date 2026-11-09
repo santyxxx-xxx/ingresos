@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { Repeat } from 'lucide-react';
 import { Header } from '../components/Header';
 import { MonthPicker } from '../components/MonthPicker';
 import { Segmented } from '../components/Segmented';
@@ -14,11 +15,12 @@ interface Props {
   setMonth: (m: string) => void;
   onEdit: (t: Transaction) => void;
   onSettings: () => void;
+  onRecurring: () => void;
 }
 
-export function Movements({ month, setMonth, onEdit, onSettings }: Props) {
+export function Movements({ month, setMonth, onEdit, onSettings, onRecurring }: Props) {
   const { data: txs, error } = useMonthTx(month);
-  const { catMap: cats } = useData();
+  const { catMap: cats, recurring } = useData();
   const [filter, setFilter] = useState<Filter>('all');
 
   const { groups, income, expense } = useMemo(() => {
@@ -46,6 +48,19 @@ export function Movements({ month, setMonth, onEdit, onSettings }: Props) {
     <div className="screen-inner">
       <Header title="Movimientos" onSettings={onSettings} />
       <MonthPicker month={month} onChange={setMonth} />
+      <button className="rec-entry glass pressable" onClick={onRecurring}>
+        <span className="badge ok">
+          <Repeat size={18} strokeWidth={1.75} />
+        </span>
+        <span className="info">
+          <span className="title">Recurrentes</span>
+          <span className="meta">
+            {recurring.filter((r) => r.active).length
+              ? `${recurring.filter((r) => r.active).length} activos · se registran solos cada mes`
+              : 'Arriendo, suscripciones, sueldo… regístralos una vez'}
+          </span>
+        </span>
+      </button>
       <Segmented
         value={filter}
         onChange={setFilter}

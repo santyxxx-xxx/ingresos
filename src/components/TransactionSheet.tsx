@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Check, Trash2 } from 'lucide-react';
+import { Check, Repeat, Trash2 } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { Segmented } from './Segmented';
 import { useFeedback } from './Feedback';
-import { childrenOf, fetchPlaces, topLevel, useData } from '../lib/data';
+import { byGroup, childrenOf, fetchPlaces, topLevel, useData } from '../lib/data';
 import type { Transaction, TxType } from '../lib/types';
 import { centsToInput, haptic, normalizePlace, parseAmount, toISODate, todayISO } from '../lib/utils';
 
@@ -21,7 +21,7 @@ function yesterdayISO() {
 }
 
 export function TransactionSheet({ open, onClose, editing, defaultType }: Props) {
-  const { uid, categories, catMap, saveTransaction, deleteTransaction } = useData();
+  const { uid, categories, catMap, groups, recurring, saveTransaction, deleteTransaction, saveRecurring } = useData();
   const { confirm, toast } = useFeedback();
   const [type, setType] = useState<TxType>(defaultType);
   const [amount, setAmount] = useState('');
@@ -31,12 +31,14 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [places, setPlaces] = useState<string[]>([]);
+  const [repeat, setRepeat] = useState(false);
   const amountRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!open) return;
     setError('');
     setSaving(false);
+    setRepeat(false);
     if (editing) {
       setType(editing.type);
       setAmount(centsToInput(editing.amount));
@@ -59,6 +61,8 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
   }, [open, uid, type]);
 
   const roots = useMemo(() => topLevel(categories, type), [categories, type]);
+  const sections = useMemo(() => byGroup(roots, groups), [roots, groups]);
+  const fromRule = editing?.recurringId ? recurring.find((r) => r.id === editing.recurringId) : undefined;
   const selected = categoryId ? catMap.get(categoryId) : undefined;
   const selectedRootId = selected ? selected.parentId ?? selected.id : null;
   const subs = useMemo(
@@ -96,9 +100,23 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
     }
     setSaving(true);
     try {
-      await saveTransaction({ id: editing?.id, type, amount: cents, categoryId, place: place.trim(), date });
-      haptic(15);
-      toast(editing ? 'Movimiento actualizado' : type === 'income' ? 'Ingreso guardado' : 'Gasto guardado');
+      if (repeat && !editing) {
+        await saveRecurring({
+          type,
+          amount: cents,
+          categoryId,
+          place: place.trim(),
+          dayOfMonth: Number(date.slice(8, 10)),
+          startDate: date,
+          active: true
+        });
+        haptic(15);
+        toast(`Se repetirá el día ${Number(date.slice(8, 10))} de cada mes`);
+      } else {
+        await saveTransaction({ id: editing?.id, type, amount: cents, categoryId, place: place.trim(), date });
+        haptic(15);
+        toast(editing ? 'Movimiento actualizado' : type === 'income' ? 'Ingreso guardado' : 'Gasto guardado');
+      }
       onClose();
     } catch (e) {
       setSaving(false);
@@ -156,23 +174,34 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
 
       <div>
         <span className="field-label">Categoría</span>
+        {sections.map((sec) => (
+          <div className="chip-section" key={sec.group?.id ?? 'none'}>
+            {sections.length > 1 && (
+              <div className="chip-section-title">
+                {sec.group ? `${sec.group.emoji} ${sec.group.name}` : 'Otras'}
+              </div>
+            )}
+            <div className="chips">
+              {sec.items.map((c) => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`chip ${type}`}
+                  aria-pressed={selectedRootId === c.id}
+                  onClick={() => {
+                    haptic(5);
+                    setError('');
+                    setCategoryId(c.id);
+                  }}
+                >
+                  <span className="e">{c.emoji}</span>
+                  {c.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        ))}
         <div className="chips">
-          {roots.map((c) => (
-            <button
-              key={c.id}
-              type="button"
-              className={`chip ${type}`}
-              aria-pressed={selectedRootId === c.id}
-              onClick={() => {
-                haptic(5);
-                setError('');
-                setCategoryId(c.id);
-              }}
-            >
-              <span className="e">{c.emoji}</span>
-              {c.name}
-            </button>
-          ))}
           {editing && editing.categoryId === null && (
             <button
               type="button"
@@ -262,6 +291,36 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
         </div>
         <input id="tx-date" className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
       </div>
+
+      {!editing && (
+        <button
+          type="button"
+          className={`toggle-row ${repeat ? 'on' : ''}`}
+          onClick={() => {
+            haptic(5);
+            setRepeat((r) => !r);
+          }}
+          aria-pressed={repeat}
+        >
+          <Repeat size={18} strokeWidth={1.75} />
+          <span className="info">
+            <span className="title">Repetir cada mes</span>
+            <span className="meta">
+              {repeat
+                ? `Se registrará solo el día ${Number(date.slice(8, 10)) || 1} de cada mes`
+                : 'Para arriendo, suscripciones, sueldo…'}
+            </span>
+          </span>
+          <span className="switch" aria-hidden="true" />
+        </button>
+      )}
+
+      {fromRule && (
+        <p className="note">
+          🔁 Este movimiento se creó automáticamente porque se repite el día {fromRule.dayOfMonth} de cada mes.
+          Cambiarlo aquí no afecta a los próximos meses: eso se edita en Movimientos → Recurrentes.
+        </p>
+      )}
 
       {error && <p className="error-text">{error}</p>}
 

@@ -1,12 +1,13 @@
 import { useMemo, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Plus } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Plus, Target } from 'lucide-react';
 import { Header } from '../components/Header';
 import { MonthPicker } from '../components/MonthPicker';
 import { Donut, type Slice } from '../components/Donut';
 import { TxRow } from '../components/TxRow';
-import { UNCATEGORIZED, useData, useMonthTx } from '../lib/data';
+import { useAccount } from '../lib/account';
+import { UNCATEGORIZED, catInfo, groupIdOf, rootOf, useData, useTxRange } from '../lib/data';
 import type { Category, Transaction } from '../lib/types';
-import { money, moneyParts, normalizePlace } from '../lib/utils';
+import { currentMonth, money, moneyParts, monthLabel, normalizePlace, shiftMonth, todayISO } from '../lib/utils';
 
 interface Props {
   month: string;
@@ -15,10 +16,12 @@ interface Props {
   onAdd: () => void;
   onSeeAll: () => void;
   onSettings: () => void;
+  onGoCategories: () => void;
 }
 
 const COLORS = ['var(--c1)', 'var(--c2)', 'var(--c3)', 'var(--c4)', 'var(--c5)', 'var(--c6)'];
 const NONE = '__none__';
+const MONTHS_SHORT = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic'];
 
 function greeting() {
   const h = new Date().getHours();
@@ -26,6 +29,13 @@ function greeting() {
   if (h < 19) return 'Buenas tardes';
   return 'Buenas noches';
 }
+
+const sum = (list: Transaction[]) => list.reduce((a, t) => a + t.amount, 0);
+const monthName = (m: string) => monthLabel(m).split(' ')[0].toLowerCase();
+const daysIn = (m: string) => {
+  const [y, mm] = m.split('-').map(Number);
+  return new Date(y, mm, 0).getDate();
+};
 
 interface RankItem {
   id: string;
@@ -69,7 +79,6 @@ function rankByRoot(list: Transaction[], catMap: Map<string, Category>, total: n
         emoji: root?.emoji ?? UNCATEGORIZED.emoji,
         value: r.value,
         pct: total ? (r.value / total) * 100 : 0,
-        // el desglose solo tiene sentido si hay alguna subcategoría con movimientos
         children: children.some((c) => !c.id.endsWith(':general') && c.id !== NONE) ? children : []
       };
     })
@@ -135,63 +144,267 @@ function RankList({ items, colorFor, tone }: { items: RankItem[]; colorFor: (i: 
   );
 }
 
-export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings }: Props) {
-  const { data: txs, error, loading } = useMonthTx(month);
-  const { catMap } = useData();
+/** Variación porcentual con color según si es bueno o malo */
+function Delta({ now, before, goodWhenUp, label }: { now: number; before: number; goodWhenUp: boolean; label: string }) {
+  if (!before && !now) return null;
+  if (!before) return <span className="delta neutral">Nuevo vs {label}</span>;
+  const pct = ((now - before) / before) * 100;
+  if (Math.abs(pct) < 0.5) return <span className="delta neutral">Igual que {label}</span>;
+  const up = pct > 0;
+  const good = up === goodWhenUp;
+  return (
+    <span className={`delta ${good ? 'good' : 'bad'}`}>
+      {up ? '↑' : '↓'} {Math.abs(pct).toFixed(0)}% vs {label}
+    </span>
+  );
+}
 
-  const data = useMemo(() => {
-    const list = txs ?? [];
-    const incomes = list.filter((t) => t.type === 'income');
-    const expenses = list.filter((t) => t.type === 'expense');
-    const income = incomes.reduce((a, t) => a + t.amount, 0);
-    const expense = expenses.reduce((a, t) => a + t.amount, 0);
+function MonthsChart({
+  months,
+  selected,
+  onPick
+}: {
+  months: Array<{ month: string; income: number; expense: number }>;
+  selected: string;
+  onPick: (m: string) => void;
+}) {
+  const max = Math.max(1, ...months.flatMap((m) => [m.income, m.expense]));
+  const W = 320;
+  const H = 130;
+  const top = 8;
+  const bottom = 22;
+  const slot = W / months.length;
+  const bw = Math.min(14, slot / 3.2);
+  const h = (v: number) => (v / max) * (H - top - bottom);
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} className="months-chart" role="img" aria-label="Ingresos y gastos de los últimos 6 meses">
+      <line x1="0" x2={W} y1={H - bottom} y2={H - bottom} style={{ stroke: 'var(--hair)' }} />
+      {months.map((m, i) => {
+        const cx = slot * i + slot / 2;
+        const isSel = m.month === selected;
+        const label = MONTHS_SHORT[Number(m.month.slice(5, 7)) - 1];
+        return (
+          <g key={m.month} onClick={() => onPick(m.month)} style={{ cursor: 'pointer' }} opacity={isSel ? 1 : 0.55}>
+            <rect x={cx - slot / 2} y={0} width={slot} height={H} fill="transparent" />
+            <rect
+              x={cx - bw - 1.5}
+              y={H - bottom - h(m.income)}
+              width={bw}
+              height={Math.max(h(m.income), m.income ? 2 : 0)}
+              rx={4}
+              style={{ fill: 'var(--accent)' }}
+            />
+            <rect
+              x={cx + 1.5}
+              y={H - bottom - h(m.expense)}
+              width={bw}
+              height={Math.max(h(m.expense), m.expense ? 2 : 0)}
+              rx={4}
+              style={{ fill: 'var(--expense)' }}
+            />
+            <text
+              x={cx}
+              y={H - 6}
+              textAnchor="middle"
+              style={{ fill: isSel ? 'var(--ink)' : 'var(--ink-3)', fontSize: 11, fontWeight: isSel ? 650 : 500 }}
+            >
+              {label}
+            </text>
+          </g>
+        );
+      })}
+    </svg>
+  );
+}
+
+export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings, onGoCategories }: Props) {
+  const account = useAccount();
+  const { catMap, categories, groups, recurring } = useData();
+  const from = shiftMonth(month, -5);
+  const { data: range, error, loading } = useTxRange(from, month);
+  const [group, setGroup] = useState<string>('all');
+
+  const prevMonth = shiftMonth(month, -1);
+  const isCurrent = month === currentMonth();
+
+  const d = useMemo(() => {
+    const all = range ?? [];
+    const inGroup = (t: Transaction) => group === 'all' || groupIdOf(catMap, t.categoryId) === group;
+    const filtered = all.filter(inGroup);
+    const cur = filtered.filter((t) => t.date.startsWith(month));
+    const prev = filtered.filter((t) => t.date.startsWith(prevMonth));
+    const exp = cur.filter((t) => t.type === 'expense');
+    const inc = cur.filter((t) => t.type === 'income');
+    const prevExp = prev.filter((t) => t.type === 'expense');
+    const prevInc = prev.filter((t) => t.type === 'income');
+    const expense = sum(exp);
+    const income = sum(inc);
+
+    // Lugares
     const byPlace = new Map<string, { label: string; total: number; n: number }>();
-    for (const t of expenses) {
+    for (const t of exp) {
       if (!t.place.trim()) continue;
-      const pk = normalizePlace(t.place);
-      const cur = byPlace.get(pk);
-      if (cur) {
-        cur.total += t.amount;
-        cur.n++;
-      } else byPlace.set(pk, { label: t.place.trim(), total: t.amount, n: 1 });
+      const k = normalizePlace(t.place);
+      const p = byPlace.get(k);
+      if (p) {
+        p.total += t.amount;
+        p.n++;
+      } else byPlace.set(k, { label: t.place.trim(), total: t.amount, n: 1 });
     }
+
+    // Promedios y proyección
+    const today = todayISO();
+    const daysElapsed = isCurrent ? Number(today.slice(8, 10)) : daysIn(month);
+    const avgDaily = daysElapsed ? expense / daysElapsed : 0;
+    const projection = isCurrent ? Math.round(avgDaily * daysIn(month)) : expense;
+    const biggest = exp.reduce<Transaction | null>((a, t) => (!a || t.amount > a.amount ? t : a), null);
+
+    // 6 meses
+    const months = Array.from({ length: 6 }, (_, i) => shiftMonth(from, i)).map((m) => {
+      const list = filtered.filter((t) => t.date.startsWith(m));
+      return {
+        month: m,
+        income: sum(list.filter((t) => t.type === 'income')),
+        expense: sum(list.filter((t) => t.type === 'expense'))
+      };
+    });
+    const withData = months.filter((m) => m.expense > 0);
+    const avgExpense6 = withData.length ? withData.reduce((a, m) => a + m.expense, 0) / withData.length : 0;
+
+    // Cambios por categoría vs mes anterior
+    const byRoot = (list: Transaction[]) => {
+      const m = new Map<string, number>();
+      for (const t of list) {
+        const id = rootOf(catMap, t.categoryId)?.id ?? NONE;
+        m.set(id, (m.get(id) ?? 0) + t.amount);
+      }
+      return m;
+    };
+    const nowMap = byRoot(exp);
+    const beforeMap = byRoot(prevExp);
+    const changes = [...new Set([...nowMap.keys(), ...beforeMap.keys()])]
+      .map((id) => {
+        const now = nowMap.get(id) ?? 0;
+        const before = beforeMap.get(id) ?? 0;
+        const c = id === NONE ? undefined : catMap.get(id);
+        return {
+          id,
+          name: c?.name ?? UNCATEGORIZED.name,
+          emoji: c?.emoji ?? UNCATEGORIZED.emoji,
+          now,
+          before,
+          diff: now - before
+        };
+      })
+      .filter((x) => x.diff !== 0)
+      .sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff))
+      .slice(0, 4);
+
+    // Presupuestos (categorías principales de gasto con presupuesto)
+    const budgets = categories
+      .filter((c) => !c.parentId && c.type === 'expense' && c.budget && (group === 'all' || c.groupId === group))
+      .map((c) => {
+        const spent = nowMap.get(c.id) ?? 0;
+        return { cat: c, spent, budget: c.budget!, pct: (spent / c.budget!) * 100 };
+      })
+      .sort((a, b) => b.pct - a.pct);
+
     return {
       income,
       expense,
       balance: income - expense,
-      expenseRank: rankByRoot(expenses, catMap, expense),
-      incomeRank: rankByRoot(incomes, catMap, income),
+      prevIncome: sum(prevInc),
+      prevExpense: sum(prevExp),
+      expenseRank: rankByRoot(exp, catMap, expense),
+      incomeRank: rankByRoot(inc, catMap, income),
       places: [...byPlace.values()].sort((a, b) => b.total - a.total).slice(0, 5),
-      recent: list.slice(0, 5),
-      count: list.length
+      recent: cur.slice(0, 5),
+      count: cur.length,
+      avgDaily,
+      projection,
+      biggest,
+      months,
+      avgExpense6,
+      changes,
+      budgets
     };
-  }, [txs, catMap]);
+  }, [range, group, catMap, categories, month, prevMonth, from, isCurrent]);
+
+  // Fijos del mes (solo mes actual)
+  const fixed = useMemo(() => {
+    if (!isCurrent) return [];
+    const today = Number(todayISO().slice(8, 10));
+    const dim = daysIn(month);
+    return recurring
+      .filter((r) => r.active && (group === 'all' || groupIdOf(catMap, r.categoryId) === group))
+      .map((r) => {
+        const day = Math.min(r.dayOfMonth, dim);
+        return { r, day, done: day <= today && r.startDate <= todayISO() };
+      })
+      .sort((a, b) => a.day - b.day);
+  }, [recurring, isCurrent, month, group, catMap]);
 
   const slices: Slice[] = useMemo(() => {
-    const top = data.expenseRank.slice(0, 5).map((r, i) => ({ key: r.id, value: r.value, color: COLORS[i] }));
-    const rest = data.expenseRank.slice(5).reduce((a, r) => a + r.value, 0);
+    const top = d.expenseRank.slice(0, 5).map((r, i) => ({ key: r.id, value: r.value, color: COLORS[i] }));
+    const rest = d.expenseRank.slice(5).reduce((a, r) => a + r.value, 0);
     if (rest > 0) top.push({ key: '__rest__', value: rest, color: 'var(--c7)' });
     return top;
-  }, [data.expenseRank]);
+  }, [d.expenseRank]);
 
-  const bal = moneyParts(data.balance);
-  const maxPlace = data.places[0]?.total ?? 1;
-  const dim = loading && txs === undefined ? 'loading-dim' : '';
+  const bal = moneyParts(d.balance);
+  const maxPlace = d.places[0]?.total ?? 1;
+  const dim = loading && range === undefined ? 'loading-dim' : '';
+  const prevLabel = monthName(prevMonth);
+  const hasBudgets = categories.some((c) => c.budget);
+  const budgetTotal = d.budgets.reduce((a, b) => a + b.budget, 0);
+  const budgetSpent = d.budgets.reduce((a, b) => a + b.spent, 0);
+  const pendingFixed = fixed.filter((f) => !f.done);
 
   return (
     <div className="screen-inner">
-      <Header eyebrow={greeting()} title="Resumen" onSettings={onSettings} />
+      <Header
+        eyebrow={greeting()}
+        title={
+          <>
+            Bienvenido{account.name ? ', ' : ''}
+            {account.name && <em>{account.name}</em>}
+          </>
+        }
+        onSettings={onSettings}
+      />
       <MonthPicker month={month} onChange={setMonth} />
+
+      {groups.length > 0 && (
+        <div className="group-filter no-select" role="tablist" aria-label="Filtrar por grupo">
+          <button role="tab" aria-selected={group === 'all'} onClick={() => setGroup('all')}>
+            Todo
+          </button>
+          {groups.map((g) => (
+            <button key={g.id} role="tab" aria-selected={group === g.id} onClick={() => setGroup(g.id)}>
+              <span className="e">{g.emoji}</span> {g.name}
+            </button>
+          ))}
+        </div>
+      )}
 
       {error && <p className="error-text">{error}</p>}
 
       <section className={`card glass balance ${dim}`}>
-        <div className="k">Balance del mes</div>
-        <div className={`big-number ${data.balance < 0 ? 'neg' : ''}`}>
+        <div className="k">
+          {group === 'all' ? 'Balance del mes' : `Balance de ${groups.find((g) => g.id === group)?.name ?? ''}`}
+        </div>
+        <div className={`big-number ${d.balance < 0 ? 'neg' : ''}`}>
           {bal.sign}
           {bal.int}
           <span className="dec">{bal.dec}</span>
         </div>
+        <p className="balance-note">
+          {d.count === 0
+            ? 'Aún no hay movimientos este mes.'
+            : d.balance >= 0
+              ? `Te queda el ${d.income ? Math.round((d.balance / d.income) * 100) : 0}% de lo que entró.`
+              : 'Este mes estás gastando más de lo que entra.'}
+        </p>
       </section>
 
       <div className={`stat-row ${dim}`}>
@@ -202,7 +415,8 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
             </span>
             Ingresos
           </div>
-          <div className="val">{money(data.income)}</div>
+          <div className="val">{money(d.income)}</div>
+          <Delta now={d.income} before={d.prevIncome} goodWhenUp label={prevLabel} />
         </div>
         <div className="stat glass expense">
           <div className="top">
@@ -211,33 +425,102 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
             </span>
             Gastos
           </div>
-          <div className="val">{money(data.expense)}</div>
+          <div className="val">{money(d.expense)}</div>
+          <Delta now={d.expense} before={d.prevExpense} goodWhenUp={false} label={prevLabel} />
         </div>
       </div>
 
-      {txs !== undefined && data.count === 0 && (
+      {range !== undefined && d.count === 0 && (
         <section className="card glass empty">
           <div className="art">🌿</div>
           <h3>Sin movimientos este mes</h3>
-          <p>Registra tu primer gasto o ingreso y aquí verás en qué se va tu dinero.</p>
+          <p>Registra tu primer gasto o ingreso con el botón +.</p>
           <button className="btn btn-primary" style={{ marginTop: 16 }} onClick={onAdd}>
             <Plus size={20} strokeWidth={2} /> Agregar movimiento
           </button>
         </section>
       )}
 
-      {data.expenseRank.length > 0 && (
+      {d.expense > 0 && (
+        <div className={`insights ${dim}`}>
+          <div className="insight glass">
+            <small>Promedio diario</small>
+            <b className="display">{money(Math.round(d.avgDaily))}</b>
+          </div>
+          <div className="insight glass">
+            <small>{isCurrent ? 'Proyección del mes' : 'Promedio 6 meses'}</small>
+            <b className="display">{money(isCurrent ? d.projection : Math.round(d.avgExpense6))}</b>
+          </div>
+          {d.biggest && (
+            <button className="insight glass pressable" onClick={() => onEdit(d.biggest!)}>
+              <small>Mayor gasto</small>
+              <b className="display">{money(d.biggest.amount)}</b>
+              <span>{d.biggest.place || catInfo(catMap, d.biggest.categoryId).name}</span>
+            </button>
+          )}
+        </div>
+      )}
+
+      {d.budgets.length > 0 ? (
+        <section className="card glass">
+          <div className="card-title">
+            <h2>Presupuestos</h2>
+            <span className="card-aside">
+              {money(budgetSpent)} de {money(budgetTotal)}
+            </span>
+          </div>
+          <div className="budget-list">
+            {d.budgets.map((b) => {
+              const state = b.pct >= 100 ? 'over' : b.pct >= 80 ? 'warn' : 'ok';
+              const left = b.budget - b.spent;
+              return (
+                <div className={`budget ${state}`} key={b.cat.id}>
+                  <div className="budget-top">
+                    <span className="badge small">{b.cat.emoji}</span>
+                    <span className="name">{b.cat.name}</span>
+                    <span className="amt">
+                      {money(b.spent)} <small>/ {money(b.budget)}</small>
+                    </span>
+                  </div>
+                  <div className="budget-bar">
+                    <span style={{ width: `${Math.min(100, b.pct)}%` }} />
+                  </div>
+                  <div className="budget-foot">
+                    {left >= 0 ? `Te quedan ${money(left)}` : `Te pasaste por ${money(-left)}`}
+                    <span>{Math.round(b.pct)}%</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      ) : (
+        !hasBudgets &&
+        d.expense > 0 && (
+          <button className="hint-card glass pressable" onClick={onGoCategories}>
+            <span className="badge ok">
+              <Target size={18} strokeWidth={1.75} />
+            </span>
+            <span>
+              <b>Ponle un límite a tus gastos.</b> Define un presupuesto mensual en tus categorías y aquí verás cuánto
+              te queda.
+            </span>
+          </button>
+        )
+      )}
+
+      {d.expenseRank.length > 0 && (
         <section className="card glass">
           <div className="card-title">
             <h2>Dónde gasto más</h2>
           </div>
           <div className="donut-wrap">
-            <Donut slices={slices} center={money(data.expense)} sub="gastado" />
+            <Donut slices={slices} center={money(d.expense)} sub="gastado" />
             <div className="legend">
               {slices.map((s) => {
-                const r = data.expenseRank.find((x) => x.id === s.key);
+                const r = d.expenseRank.find((x) => x.id === s.key);
                 const name = r ? `${r.emoji} ${r.name}` : 'Resto';
-                const pct = data.expense ? (s.value / data.expense) * 100 : 0;
+                const pct = d.expense ? (s.value / d.expense) * 100 : 0;
                 return (
                   <div className="legend-item" key={s.key}>
                     <i style={{ background: s.color }} />
@@ -249,9 +532,9 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
             </div>
           </div>
           <div style={{ marginTop: 20 }}>
-            <RankList items={data.expenseRank} colorFor={(i) => (i < 5 ? COLORS[i] : 'var(--c7)')} />
+            <RankList items={d.expenseRank} colorFor={(i) => (i < 5 ? COLORS[i] : 'var(--c7)')} />
           </div>
-          {data.expenseRank.some((r) => r.children.length > 0) && (
+          {d.expenseRank.some((r) => r.children.length > 0) && (
             <p className="note" style={{ marginTop: 14 }}>
               Toca una categoría para ver sus subcategorías.
             </p>
@@ -259,19 +542,84 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
         </section>
       )}
 
-      {data.places.length > 0 && (
+      {d.months.some((m) => m.income || m.expense) && (
         <section className="card glass">
           <div className="card-title">
-            <h2>En qué lugares gasto más</h2>
+            <h2>Mes a mes</h2>
+            <span className="legend-inline">
+              <i style={{ background: 'var(--accent)' }} /> Ingresos <i style={{ background: 'var(--expense)' }} /> Gastos
+            </span>
+          </div>
+          <MonthsChart months={d.months} selected={month} onPick={setMonth} />
+          {d.changes.length > 0 && (
+            <>
+              <div className="subhead">Cambios vs {prevLabel}</div>
+              <div className="change-list">
+                {d.changes.map((c) => (
+                  <div className="change" key={c.id}>
+                    <span className="badge small">{c.emoji}</span>
+                    <span className="name">{c.name}</span>
+                    <span className="vals">
+                      <span className={`delta ${c.diff > 0 ? 'bad' : 'good'}`}>
+                        {c.diff > 0 ? '↑' : '↓'} {money(Math.abs(c.diff))}
+                      </span>
+                      <small>
+                        {money(c.before)} → {money(c.now)}
+                      </small>
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </section>
+      )}
+
+      {fixed.length > 0 && (
+        <section className="card glass">
+          <div className="card-title">
+            <h2>Fijos del mes</h2>
+            <span className="card-aside">
+              {pendingFixed.length ? `${pendingFixed.length} por venir` : 'Todos registrados'}
+            </span>
+          </div>
+          <div className="fixed-list">
+            {fixed.map(({ r, day, done }) => {
+              const c = catInfo(catMap, r.categoryId);
+              return (
+                <div className={`fixed ${done ? 'done' : ''}`} key={r.id}>
+                  <span className="day">
+                    <b>{day}</b>
+                    <small>{MONTHS_SHORT[Number(month.slice(5, 7)) - 1]}</small>
+                  </span>
+                  <span className="info">
+                    <span className="title">{r.place || c.name}</span>
+                    <span className="meta">{done ? 'Registrado' : 'Pendiente'} · {c.name}</span>
+                  </span>
+                  <span className={`amount ${r.type === 'income' ? 'c-income' : ''}`}>
+                    {r.type === 'income' ? '+' : '−'}
+                    {money(r.amount)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {d.places.length > 0 && (
+        <section className="card glass">
+          <div className="card-title">
+            <h2>Dónde compro más</h2>
           </div>
           <div className="rank-list">
-            {data.places.map((p, i) => (
+            {d.places.map((p, i) => (
               <div className="rank" key={p.label}>
                 <span className="badge num">{i + 1}</span>
                 <span className="name">{p.label}</span>
                 <span className="amt">{money(p.total)}</span>
                 <div className="bar">
-                  <span style={{ width: `${(p.total / maxPlace) * 100}%`, background: 'var(--ink)', opacity: 0.8 - i * 0.1 }} />
+                  <span style={{ width: `${(p.total / maxPlace) * 100}%`, background: 'var(--c5)', opacity: 0.85 - i * 0.12 }} />
                 </div>
                 <span className="sub">
                   {p.n} {p.n === 1 ? 'vez' : 'veces'}
@@ -282,16 +630,16 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
         </section>
       )}
 
-      {data.incomeRank.length > 0 && (
+      {d.incomeRank.length > 0 && (
         <section className="card glass">
           <div className="card-title">
-            <h2>Ingresos del mes</h2>
+            <h2>De dónde entra</h2>
           </div>
-          <RankList items={data.incomeRank} colorFor={() => 'var(--accent-ink)'} tone="income" />
+          <RankList items={d.incomeRank} colorFor={() => 'var(--accent)'} tone="income" />
         </section>
       )}
 
-      {data.recent.length > 0 && (
+      {d.recent.length > 0 && (
         <section className="card glass" style={{ paddingBottom: 8 }}>
           <div className="card-title" style={{ marginBottom: 4 }}>
             <h2>Últimos movimientos</h2>
@@ -300,7 +648,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
             </button>
           </div>
           <div className="tx-list">
-            {data.recent.map((t) => (
+            {d.recent.map((t) => (
               <TxRow key={t.id} tx={t} cats={catMap} onClick={() => onEdit(t)} showDate />
             ))}
           </div>

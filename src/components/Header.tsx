@@ -2,7 +2,7 @@ import { Settings2 } from 'lucide-react';
 import type { ReactNode } from 'react';
 
 export function Header({ title, eyebrow, onSettings, right }: {
-  title: string;
+  title: ReactNode;
   eyebrow?: string;
   onSettings?: () => void;
   right?: ReactNode;

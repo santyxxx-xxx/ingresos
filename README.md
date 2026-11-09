@@ -2,18 +2,23 @@
 
 Web para organizar **gastos e ingresos personales** con cuenta propia: entras con tu correo desde cualquier dispositivo y ves tus datos. Interfaz en español, moneda USD, pensada primero para celular.
 
-Hecha con React + Vite + TypeScript y Supabase (Auth + Postgres). Estilo *liquid glass* en beige, negro suave y verde bosque, con modo oscuro.
+Hecha con React + Vite + TypeScript y Supabase (Auth + Postgres). Estilo *liquid glass* claro y tranquilo (marfil, salvia y terracota) con Instrument Serif para títulos y cifras.
 
 ## Funciones
 
-- **Cuentas:** correo y contraseña (Supabase Auth). Cada persona ve solo sus datos (RLS).
-- **Resumen:** selector de mes, balance, ingresos y gastos; “Dónde gasto más” (dona + ranking por categoría; toca una categoría para ver sus subcategorías); top 5 de lugares; ingresos por categoría; últimos movimientos.
-- **Movimientos:** lista del mes agrupada por día, filtro Todos / Gastos / Ingresos. Toca uno para editarlo o borrarlo.
-- **Categorías y subcategorías:** edita nombre y emoji, crea, borra (incluso las base). Cada categoría puede tener subcategorías (ej. Comida › Supermercado, Comida › Restaurantes).
-  - Borrar una **categoría** borra sus subcategorías; sus movimientos pasan a **“Sin categoría”**.
-  - Borrar una **subcategoría** mueve sus movimientos a su categoría principal.
-- **Botón +:** hoja deslizable con monto (teclado numérico), categoría → subcategoría, lugar (con sugerencias) y fecha.
-- **Ajustes:** tema Claro / Oscuro / Auto, cuenta, y copia de seguridad en JSON (exportar / importar).
+- **Cuentas:** correo y contraseña o **Google**. Al entrar por primera vez pide tu nombre y te saluda: “Bienvenido, …”. Cada persona ve solo sus datos (RLS).
+- **Resumen** (filtrable por grupo: Todo / Casa / Personal / …):
+  - Balance del mes, ingresos y gastos con su variación frente al mes anterior.
+  - Promedio diario, proyección de fin de mes y el gasto más grande.
+  - **Presupuestos:** cuánto llevas de cada límite mensual, con aviso al 80 % y al pasarte.
+  - Dónde gasto más (dona + ranking por categoría, toca para ver subcategorías).
+  - **Mes a mes:** gráfico de los últimos 6 meses y las categorías que más cambiaron.
+  - **Fijos del mes:** recurrentes registrados y por venir.
+  - Dónde compro más (top 5 lugares), de dónde entra el dinero y últimos movimientos.
+- **Movimientos:** lista del mes por día, filtro por tipo, y acceso a **Recurrentes**.
+- **Recurrentes:** arriendo, suscripciones, sueldo… se registran solos el día elegido de cada mes (se pueden pausar). También desde el formulario con “Repetir cada mes”.
+- **Grupos → categorías → subcategorías:** p. ej. Casa › Comida › Supermercado. Cada categoría puede tener presupuesto mensual.
+- **Ajustes:** nombre, cerrar sesión y copia en JSON (exportar / importar).
 
 ## Variables de entorno (Vercel)
 
@@ -32,10 +37,12 @@ Proyecto **Ingresos**. Las migraciones están en `supabase/migrations/` y se apl
 
 | Tabla / vista | Para qué |
 |---|---|
-| `categories` | `user_id`, `id`, `name`, `emoji`, `type` (expense/income), `parent_id` (subcategoría), `sort_order` |
+| `categories` | `user_id`, `id`, `name`, `emoji`, `type`, `parent_id` (subcategoría), `group_id`, `monthly_budget_cents`, `sort_order` |
 | `transactions` | `user_id`, `id`, `type`, `amount_cents`, `category_id`, `place`, `date` |
 | `category_usage` (vista) | cantidad de movimientos por categoría |
 | `place_usage` (vista) | lugares usados, para sugerencias |
+| `category_groups` | grupos (Casa, Personal…) |
+| `recurring` | movimientos que se repiten cada mes; `generate_recurring(fecha)` los crea sin duplicar |
 
 - Llave primaria `(user_id, id)`; los montos se guardan en centavos.
 - Subcategorías de un solo nivel y del mismo tipo que su categoría (lo valida la base de datos).
@@ -43,8 +50,9 @@ Proyecto **Ingresos**. Las migraciones están en `supabase/migrations/` y se apl
 
 ### Auth
 
-- En *Authentication → URL Configuration* pon tu URL de Vercel como **Site URL** y agrégala en **Redirect URLs** (para el enlace de confirmación del correo).
-- O, si no quieres confirmar correos, desactiva **Confirm email** en *Authentication → Sign In / Providers → Email*.
+- *Authentication → URL Configuration*: **Site URL** = dominio de producción de Vercel; en **Redirect URLs** agrega ese dominio con `/**`.
+- Correo: desactiva **Confirm email** si no quieres confirmar cuentas (*Authentication → Sign In / Providers → Email*).
+- Google: crea un cliente OAuth (tipo “Aplicación web”) en Google Cloud con la URI de redirección `https://qebcqxfkwbxvezdqffwq.supabase.co/auth/v1/callback`, y pega el Client ID y Secret en *Authentication → Sign In / Providers → Google*.
 
 ## Estructura
 
@@ -60,7 +68,6 @@ Proyecto **Ingresos**. Las migraciones están en `supabase/migrations/` y se apl
     │   ├── account.tsx      # sesión: entrar, crear cuenta, salir
     │   ├── data.tsx         # categorías, movimientos del mes, guardar/borrar
     │   ├── backup.ts        # exportar / importar JSON
-    │   ├── hooks.ts         # tema
     │   └── utils.ts         # formato USD, fechas, montos, vibración
     ├── components/          # Sheet, Login, AuthForm, TransactionSheet, CategorySheet, ...
     └── screens/             # Dashboard, Movements, Categories

@@ -1,5 +1,13 @@
 export type TxType = 'expense' | 'income';
 
+/** Grupo grande de categorías, ej. Casa, Personal */
+export interface Group {
+  id: string;
+  name: string;
+  emoji: string;
+  order: number;
+}
+
 export interface Category {
   id: string;
   name: string;
@@ -7,6 +15,10 @@ export interface Category {
   type: TxType;
   /** null = categoría principal; si tiene valor, es subcategoría de esa categoría */
   parentId: string | null;
+  /** Solo en categorías principales */
+  groupId: string | null;
+  /** Presupuesto mensual en centavos (solo categorías principales de gasto) */
+  budget: number | null;
   order: number;
   createdAt: string;
 }
@@ -14,7 +26,7 @@ export interface Category {
 export interface Transaction {
   id: string;
   type: TxType;
-  /** Monto en centavos (entero) para evitar errores de redondeo */
+  /** Monto en centavos (entero) */
   amount: number;
   /** null = "Sin categoría". Puede ser una categoría o una subcategoría */
   categoryId: string | null;
@@ -22,12 +34,26 @@ export interface Transaction {
   /** YYYY-MM-DD */
   date: string;
   createdAt: string;
+  recurringId: string | null;
+}
+
+export interface Recurring {
+  id: string;
+  type: TxType;
+  amount: number;
+  categoryId: string | null;
+  place: string;
+  dayOfMonth: number;
+  startDate: string;
+  active: boolean;
 }
 
 export interface BackupFile {
   app: 'ingresos';
-  version: 2;
+  version: 3;
   exportedAt: string;
+  groups: Group[];
   categories: Category[];
   transactions: Transaction[];
+  recurring: Recurring[];
 }

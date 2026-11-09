@@ -18,6 +18,7 @@ export function TxRow({ tx, cats, onClick, showDate }: {
         <span className="meta">
           {tx.place ? c.full : tx.type === 'income' ? 'Ingreso' : 'Gasto'}
           {showDate && ` · ${shortDate(tx.date)}`}
+          {tx.recurringId && ' · 🔁'}
         </span>
       </span>
       <span className={`amount ${tx.type === 'income' ? 'c-income' : ''}`}>

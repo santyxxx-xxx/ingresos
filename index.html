@@ -7,9 +7,9 @@
       content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
     />
     <title>Ingresos</title>
-    <meta name="description" content="Organiza tus gastos e ingresos personales, sin conexión." />
-    <meta name="theme-color" content="#EFE7DA" />
-    <meta name="color-scheme" content="light dark" />
+    <meta name="description" content="Organiza tus gastos e ingresos personales." />
+    <meta name="theme-color" content="#F3EEE6" />
+    <meta name="color-scheme" content="light" />
 
     <!-- iOS -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -20,17 +20,6 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <link rel="icon" type="image/png" href="/icons/favicon.png" />
 
-    <script>
-      // Aplica el tema antes de pintar para evitar parpadeo
-      (function () {
-        try {
-          var t = localStorage.getItem('theme') || 'system';
-          var dark = t === 'dark' || (t === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-          document.documentElement.dataset.theme = dark ? 'dark' : 'light';
-          document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#0E0F0E' : '#EFE7DA');
-        } catch (e) {}
-      })();
-    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -7,11 +7,13 @@ import { Login } from './components/Login';
 import { TransactionSheet } from './components/TransactionSheet';
 import { CategorySheet } from './components/CategorySheet';
 import { SettingsSheet } from './components/SettingsSheet';
+import { GroupSheet } from './components/GroupSheet';
+import { RecurringSheet } from './components/RecurringSheet';
+import { NameStep } from './components/NameStep';
 import { Dashboard } from './screens/Dashboard';
 import { Movements } from './screens/Movements';
 import { Categories } from './screens/Categories';
-import { useTheme } from './lib/hooks';
-import type { Category, Transaction, TxType } from './lib/types';
+import type { Category, Group, Transaction, TxType } from './lib/types';
 import { currentMonth, haptic } from './lib/utils';
 
 type Tab = 'home' | 'moves' | 'cats';
@@ -35,6 +37,7 @@ function Gate() {
   const account = useAccount();
   if (!account.ready) return <div className="backdrop-art" aria-hidden="true" />;
   if (!account.session) return <Login />;
+  if (!account.name) return <NameStep />;
   const uid = account.session.user.id;
   return (
     <DataProvider key={uid} uid={uid}>
@@ -47,7 +50,6 @@ function Shell() {
   const [tab, setTab] = useState<Tab>('home');
   const [dir, setDir] = useState<'left' | 'right' | 'fade'>('fade');
   const [month, setMonth] = useState(currentMonth());
-  const [theme, setTheme] = useTheme();
 
   const [txSheet, setTxSheet] = useState<{ open: boolean; editing: Transaction | null; type: TxType }>({
     open: false,
@@ -61,6 +63,8 @@ function Shell() {
     parent: Category | null;
   }>({ open: false, editing: null, type: 'expense', parent: null });
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [groupSheet, setGroupSheet] = useState<{ open: boolean; editing: Group | null }>({ open: false, editing: null });
+  const [recOpen, setRecOpen] = useState(false);
   const screenRef = useRef<HTMLDivElement>(null);
 
   const go = (next: Tab) => {
@@ -83,6 +87,8 @@ function Shell() {
   const closeTx = useCallback(() => setTxSheet((s) => ({ ...s, open: false })), []);
   const closeCat = useCallback(() => setCatSheet((s) => ({ ...s, open: false })), []);
   const closeSettings = useCallback(() => setSettingsOpen(false), []);
+  const closeGroup = useCallback(() => setGroupSheet((s) => ({ ...s, open: false })), []);
+  const closeRec = useCallback(() => setRecOpen(false), []);
   const openSettings = () => setSettingsOpen(true);
 
   const activeIdx = TABS.findIndex((t) => t.id === tab);
@@ -107,15 +113,23 @@ function Shell() {
                 onAdd={addTx}
                 onSeeAll={() => go('moves')}
                 onSettings={openSettings}
+                onGoCategories={() => go('cats')}
               />
             )}
             {tab === 'moves' && (
-              <Movements month={month} setMonth={setMonth} onEdit={editTx} onSettings={openSettings} />
+              <Movements
+                month={month}
+                setMonth={setMonth}
+                onEdit={editTx}
+                onSettings={openSettings}
+                onRecurring={() => setRecOpen(true)}
+              />
             )}
             {tab === 'cats' && (
               <Categories
                 onEdit={(c) => setCatSheet({ open: true, editing: c, type: c.type, parent: null })}
                 onNew={(type, parent) => setCatSheet({ open: true, editing: null, type, parent })}
+                onEditGroup={(g) => setGroupSheet({ open: true, editing: g })}
                 onSettings={openSettings}
               />
             )}
@@ -146,7 +160,9 @@ function Shell() {
         defaultType={catSheet.type}
         parent={catSheet.parent}
       />
-      <SettingsSheet open={settingsOpen} onClose={closeSettings} theme={theme} setTheme={setTheme} />
+      <SettingsSheet open={settingsOpen} onClose={closeSettings} />
+      <GroupSheet open={groupSheet.open} onClose={closeGroup} editing={groupSheet.editing} />
+      <RecurringSheet open={recOpen} onClose={closeRec} />
     </>
   );
 }

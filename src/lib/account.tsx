@@ -6,6 +6,10 @@ interface AccountCtx {
   ready: boolean;
   session: Session | null;
   email: string | null;
+  /** Nombre para el saludo (guardado en la cuenta o tomado de Google) */
+  name: string | null;
+  setName: (name: string) => Promise<void>;
+  signInWithGoogle: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   /** 'session' = ya entró; 'confirm' = debe confirmar el correo primero */
   signUp: (email: string, password: string) => Promise<'session' | 'confirm'>;
@@ -56,8 +60,32 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     await supabase.auth.signOut();
   }, []);
 
+  const signInWithGoogle = useCallback(async () => {
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo: window.location.origin }
+    });
+    if (error) throw new Error(friendlyError(error));
+  }, []);
+
+  const setName = useCallback(async (name: string) => {
+    const { data, error } = await supabase.auth.updateUser({ data: { name } });
+    if (error) throw new Error(friendlyError(error));
+    if (data.user) setSession((s) => (s ? { ...s, user: data.user! } : s));
+  }, []);
+
+  const meta = (session?.user.user_metadata ?? {}) as Record<string, unknown>;
+  const rawName =
+    (typeof meta.name === 'string' && meta.name) ||
+    (typeof meta.full_name === 'string' && meta.full_name) ||
+    (typeof meta.given_name === 'string' && meta.given_name) ||
+    '';
+  const name = rawName.trim() ? rawName.trim().split(/\s+/)[0] : null;
+
   return (
-    <Ctx.Provider value={{ ready, session, email: session?.user.email ?? null, signIn, signUp, signOut }}>
+    <Ctx.Provider
+      value={{ ready, session, email: session?.user.email ?? null, name, setName, signInWithGoogle, signIn, signUp, signOut }}
+    >
       {children}
     </Ctx.Provider>
   );

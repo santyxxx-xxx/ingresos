@@ -1,22 +1,18 @@
 import { useRef } from 'react';
 import { Download, Upload, ShieldCheck } from 'lucide-react';
 import { Sheet } from './Sheet';
-import { Segmented } from './Segmented';
 import { AccountSection } from './AccountSection';
 import { useFeedback } from './Feedback';
 import { exportBackup, parseBackup, restoreBackup } from '../lib/backup';
-import type { ThemePref } from '../lib/hooks';
 import { useData } from '../lib/data';
 import { haptic } from '../lib/utils';
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  theme: ThemePref;
-  setTheme: (t: ThemePref) => void;
 }
 
-export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
+export function SettingsSheet({ open, onClose }: Props) {
   const { confirm, toast } = useFeedback();
   const { uid, refresh } = useData();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -25,7 +21,7 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
     try {
       const r = await exportBackup(uid);
       haptic(15);
-      toast(r === 'shared' ? 'Respaldo listo' : 'Respaldo descargado');
+      toast(r === 'shared' ? 'Copia lista' : 'Copia descargada');
     } catch (e) {
       if ((e as DOMException)?.name !== 'AbortError') toast((e as Error).message || 'No se pudo exportar', 'error');
     }
@@ -36,7 +32,7 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
     try {
       const data = await parseBackup(file);
       const ok = await confirm({
-        title: 'Importar respaldo',
+        title: 'Importar copia',
         message: `El archivo tiene ${data.transactions.length} movimientos y ${data.categories.length} categorías. Reemplazará todos los datos de tu cuenta.`,
         confirmLabel: 'Importar',
         danger: true
@@ -45,7 +41,7 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
       await restoreBackup(uid, data);
       refresh();
       haptic(15);
-      toast('Respaldo importado');
+      toast('Copia importada');
       onClose();
     } catch (e) {
       await confirm({
@@ -60,22 +56,6 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
 
   return (
     <Sheet open={open} onClose={onClose} title="Ajustes">
-      <div>
-        <span className="field-label">Apariencia</span>
-        <Segmented
-          value={theme}
-          onChange={(t) => {
-            haptic(6);
-            setTheme(t);
-          }}
-          options={[
-            { value: 'light', label: 'Claro' },
-            { value: 'dark', label: 'Oscuro' },
-            { value: 'system', label: 'Auto' }
-          ]}
-        />
-      </div>
-
       <AccountSection />
 
       <div>
@@ -83,11 +63,11 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button className="btn btn-ghost" onClick={doExport}>
             <Download size={19} strokeWidth={1.75} />
-            Exportar datos (JSON)
+            Descargar mis datos (JSON)
           </button>
           <button className="btn btn-ghost" onClick={() => fileRef.current?.click()}>
             <Upload size={19} strokeWidth={1.75} />
-            Importar respaldo
+            Importar una copia
           </button>
           <input
             ref={fileRef}
@@ -101,8 +81,8 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
 
       <p className="note" style={{ display: 'flex', gap: 8 }}>
         <ShieldCheck size={16} strokeWidth={1.75} style={{ flex: 'none', marginTop: 2 }} />
-        Tus datos viven en tu cuenta y solo tú puedes verlos. El archivo JSON es una copia extra que puedes guardar
-        donde quieras.
+        Tus datos viven en tu cuenta y solo tú puedes verlos. La copia en archivo es un respaldo extra que puedes
+        guardar donde quieras.
       </p>
     </Sheet>
   );
