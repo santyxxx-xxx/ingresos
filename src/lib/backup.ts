@@ -2,14 +2,18 @@ import { db } from './db';
 import type { BackupFile, Category, Transaction } from './types';
 import { todayISO } from './utils';
 
-export async function exportBackup(): Promise<'shared' | 'downloaded'> {
-  const data: BackupFile = {
+export async function buildBackup(): Promise<BackupFile> {
+  return {
     app: 'ingresos',
     version: 1,
     exportedAt: new Date().toISOString(),
     categories: await db.categories.toArray(),
     transactions: await db.transactions.toArray()
   };
+}
+
+export async function exportBackup(): Promise<'shared' | 'downloaded'> {
+  const data = await buildBackup();
   const json = JSON.stringify(data, null, 2);
   const name = `ingresos-respaldo-${todayISO()}.json`;
   const file = new File([json], name, { type: 'application/json' });
@@ -56,6 +60,10 @@ export async function parseBackup(file: File): Promise<BackupFile> {
   } catch {
     throw new Error('El archivo no es un JSON válido.');
   }
+  return validateBackup(data);
+}
+
+export function validateBackup(data: unknown): BackupFile {
   const d = data as Partial<BackupFile>;
   if (!d || d.app !== 'ingresos' || !Array.isArray(d.categories) || !Array.isArray(d.transactions)) {
     throw new Error('Este archivo no es un respaldo de Ingresos.');

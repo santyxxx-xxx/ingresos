@@ -2,6 +2,7 @@ import { useRef } from 'react';
 import { Download, Upload, ShieldCheck } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { Segmented } from './Segmented';
+import { CloudSection } from './CloudSection';
 import { useFeedback } from './Feedback';
 import { exportBackup, parseBackup, restoreBackup } from '../lib/backup';
 import type { ThemePref } from '../lib/hooks';
@@ -72,8 +73,10 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
         />
       </div>
 
+      <CloudSection onDone={onClose} />
+
       <div>
-        <span className="field-label">Respaldo</span>
+        <span className="field-label">Respaldo en archivo</span>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
           <button className="btn btn-ghost" onClick={doExport}>
             <Download size={19} strokeWidth={1.75} />
@@ -95,8 +98,8 @@ export function SettingsSheet({ open, onClose, theme, setTheme }: Props) {
 
       <p className="note" style={{ display: 'flex', gap: 8 }}>
         <ShieldCheck size={16} strokeWidth={1.75} style={{ flex: 'none', marginTop: 2 }} />
-        Tus datos se guardan solo en este dispositivo, sin cuentas ni servidores. Exporta un respaldo de vez en
-        cuando para no perderlos si cambias de celular o borras los datos del navegador.
+        Tus datos viven en este dispositivo y funcionan sin internet. Con el respaldo en la nube se guarda una copia
+        privada en tu cuenta (solo tú puedes verla). El archivo JSON es una copia extra que puedes guardar donde quieras.
       </p>
     </Sheet>
   );

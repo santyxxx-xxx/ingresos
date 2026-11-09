@@ -4,6 +4,7 @@ import { Header } from '../components/Header';
 import { MonthPicker } from '../components/MonthPicker';
 import { Donut, type Slice } from '../components/Donut';
 import { TxRow } from '../components/TxRow';
+import { CloudBanner } from '../components/CloudBanner';
 import { catInfo, useCategories, useMonthTx } from '../lib/hooks';
 import type { Transaction } from '../lib/types';
 import { money, moneyParts, normalizePlace } from '../lib/utils';
@@ -87,6 +88,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
   return (
     <div className="screen-inner">
       <Header eyebrow={greeting()} title="Resumen" onSettings={onSettings} />
+      <CloudBanner onOpen={onSettings} />
       <MonthPicker month={month} onChange={setMonth} />
 
       <section className="card glass balance">

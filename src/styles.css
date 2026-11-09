@@ -1186,6 +1186,82 @@ p {
   color: var(--ink-2);
 }
 
+/* ---------- Nube ---------- */
+.cloud-card {
+  padding: 16px;
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.cloud-head {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+.cloud-head p {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--ink-2);
+}
+.cloud-title {
+  font-size: 15px;
+  font-weight: 650;
+  word-break: break-all;
+}
+.cloud-meta {
+  font-size: 13px;
+  color: var(--ink-3);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+.cloud-auto {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent-ink);
+  margin-top: 4px;
+}
+.badge.ok {
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+}
+.code-input {
+  text-align: center;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: 0.35em;
+}
+.btn.small {
+  height: 44px;
+  font-size: 15px;
+}
+.spin {
+  animation: spin 1s linear infinite;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.cloud-banner {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 10px 6px 10px 12px;
+  border-radius: var(--r-lg);
+}
+.cloud-banner-main {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  text-align: left;
+  font-size: 14px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: var(--ink-2);
+}
+
 /* ---------- Toast ---------- */
 .toast-host {
   position: fixed;

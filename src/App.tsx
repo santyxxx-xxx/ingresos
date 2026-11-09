@@ -1,6 +1,7 @@
 import { useCallback, useRef, useState } from 'react';
 import { ArrowLeftRight, PieChart, Plus, Tags } from 'lucide-react';
 import { FeedbackProvider } from './components/Feedback';
+import { CloudProvider } from './lib/cloud';
 import { TransactionSheet } from './components/TransactionSheet';
 import { CategorySheet } from './components/CategorySheet';
 import { SettingsSheet } from './components/SettingsSheet';
@@ -21,7 +22,9 @@ const TABS: Array<{ id: Tab; label: string; Icon: typeof PieChart }> = [
 export default function App() {
   return (
     <FeedbackProvider>
-      <Shell />
+      <CloudProvider>
+        <Shell />
+      </CloudProvider>
     </FeedbackProvider>
   );
 }
