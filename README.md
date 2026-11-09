@@ -7,17 +7,18 @@ Hecha con React + Vite + TypeScript y Supabase (Auth + Postgres). Estilo *liquid
 ## Funciones
 
 - **Cuentas:** correo y contraseña o **Google**. Al entrar por primera vez pide tu nombre y te saluda: “Bienvenido, …”. Cada persona ve solo sus datos (RLS).
-- **Resumen** (filtrable por grupo: Todo / Casa / Personal / …):
+- **Secciones** (Casa, Personal, Hijo, Esposa, Negocio…): cada gasto o ingreso dice a quién o a qué pertenece. Sirve igual para una persona o para una familia.
+- **Resumen** (vista **Total** o por sección):
   - Balance del mes, ingresos y gastos con su variación frente al mes anterior.
   - Promedio diario, proyección de fin de mes y el gasto más grande.
-  - **Presupuestos:** cuánto llevas de cada límite mensual, con aviso al 80 % y al pasarte.
+  - **Presupuestos** (en la vista Total): cuánto llevas de cada límite mensual, con aviso al 80 % y al pasarte.
   - Dónde gasto más (dona + ranking por categoría, toca para ver subcategorías).
   - **Mes a mes:** gráfico de los últimos 6 meses y las categorías que más cambiaron.
   - **Fijos del mes:** recurrentes registrados y por venir.
   - Dónde compro más (top 5 lugares), de dónde entra el dinero y últimos movimientos.
-- **Movimientos:** lista del mes por día, filtro por tipo, y acceso a **Recurrentes**.
+- **Movimientos:** lista del mes por día, filtro por sección y por tipo, y acceso a **Recurrentes**.
 - **Recurrentes:** arriendo, suscripciones, sueldo… se registran solos el día elegido de cada mes (se pueden pausar). También desde el formulario con “Repetir cada mes”.
-- **Grupos → categorías → subcategorías:** p. ej. Casa › Comida › Supermercado. Cada categoría puede tener presupuesto mensual.
+- **Categorías → subcategorías:** p. ej. Comida › Supermercado. Cada categoría puede tener presupuesto mensual. Se pueden crear desde la pestaña Categorías **o directamente al registrar un movimiento** (igual que las secciones).
 - **Ajustes:** nombre, cerrar sesión y copia en JSON (exportar / importar).
 
 ## Variables de entorno (Vercel)
@@ -41,7 +42,7 @@ Proyecto **Ingresos**. Las migraciones están en `supabase/migrations/` y se apl
 | `transactions` | `user_id`, `id`, `type`, `amount_cents`, `category_id`, `place`, `date` |
 | `category_usage` (vista) | cantidad de movimientos por categoría |
 | `place_usage` (vista) | lugares usados, para sugerencias |
-| `category_groups` | grupos (Casa, Personal…) |
+| `category_groups` | secciones (Casa, Personal, Hijo…); `transactions.section_id` y `recurring.section_id` apuntan aquí |
 | `recurring` | movimientos que se repiten cada mes; `generate_recurring(fecha)` los crea sin duplicar |
 
 - Llave primaria `(user_id, id)`; los montos se guardan en centavos.
