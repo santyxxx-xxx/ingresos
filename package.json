@@ -11,7 +11,7 @@
   },
   "dependencies": {
     "@fontsource-variable/inter": "^5.1.1",
-    "@fontsource/instrument-serif": "^5.1.0",
+    "@fontsource-variable/lora": "^5.1.1",
     "@supabase/supabase-js": "^2.58.0",
     "lucide-react": "^0.468.0",
     "react": "^18.3.1",

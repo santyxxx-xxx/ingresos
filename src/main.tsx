@@ -1,8 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fontsource-variable/inter';
-import '@fontsource/instrument-serif';
-import '@fontsource/instrument-serif/400-italic.css';
+import '@fontsource-variable/lora';
+import '@fontsource-variable/lora/wght-italic.css';
 import './styles.css';
 import App from './App';
 

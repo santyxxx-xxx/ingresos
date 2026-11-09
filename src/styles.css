@@ -56,7 +56,7 @@
   --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
   --ease-sheet: cubic-bezier(0.32, 0.72, 0, 1);
 
-  --font-display: 'Instrument Serif', 'Cormorant Garamond', 'Iowan Old Style', Georgia, serif;
+  --font-display: 'Lora Variable', Lora, 'Iowan Old Style', Georgia, serif;
   --font-body: 'Inter Variable', Inter, -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, 'Segoe UI',
     Roboto, sans-serif;
 
@@ -81,7 +81,7 @@
 .summary-line .pill b,
 .display {
   font-family: var(--font-display);
-  font-weight: 400;
+  font-weight: 500;
   font-feature-settings: 'lnum';
 }
 
@@ -300,9 +300,9 @@ p {
   padding: 6px 2px 2px;
 }
 .header h1 {
-  font-size: 36px;
-  line-height: 1.05;
-  letter-spacing: -0.01em;
+  font-size: 29px;
+  line-height: 1.15;
+  letter-spacing: -0.015em;
 }
 .header h1 em {
   font-style: italic;
@@ -377,8 +377,8 @@ p {
   margin-bottom: 14px;
 }
 .card-title h2 {
-  font-size: 23px;
-  letter-spacing: -0.005em;
+  font-size: 19px;
+  letter-spacing: -0.01em;
   line-height: 1.1;
 }
 .card-title .link {
@@ -397,15 +397,15 @@ p {
   color: var(--ink-2);
 }
 .big-number {
-  font-size: 54px;
-  line-height: 1;
-  letter-spacing: -0.015em;
+  font-size: 44px;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
   margin-top: 6px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
 .big-number .dec {
-  font-size: 0.55em;
+  font-size: 0.5em;
   letter-spacing: 0;
   opacity: 0.5;
   margin-left: 1px;
@@ -439,8 +439,8 @@ p {
   place-items: center;
 }
 .stat .val {
-  font-size: 30px;
-  letter-spacing: -0.01em;
+  font-size: 23px;
+  letter-spacing: -0.02em;
   margin-top: 10px;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -496,7 +496,7 @@ p {
 }
 .donut .center b {
   display: block;
-  font-size: 21px;
+  font-size: 17px;
 }
 .donut .center span {
   font-size: 11px;
@@ -698,7 +698,7 @@ p {
   font-weight: 500;
 }
 .summary-line .pill b {
-  font-size: 22px;
+  font-size: 18px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -882,8 +882,8 @@ p {
   touch-action: none;
 }
 .sheet-head h2 {
-  font-size: 26px;
-  letter-spacing: -0.005em;
+  font-size: 21px;
+  letter-spacing: -0.01em;
 }
 .sheet-head .icon-btn {
   width: 36px;
@@ -1333,8 +1333,8 @@ p {
   box-shadow: 0 14px 30px -12px rgba(47, 93, 80, 0.6);
 }
 .welcome h1 {
-  font-size: 44px;
-  letter-spacing: -0.01em;
+  font-size: 34px;
+  letter-spacing: -0.02em;
 }
 .welcome-sub {
   font-size: 15px;
@@ -1553,8 +1553,8 @@ p {
 }
 .group-head h3 {
   font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 24px;
+  font-weight: 500;
+  font-size: 19px;
 }
 .group-head .e {
   font-size: 18px;
@@ -1689,7 +1689,7 @@ p {
   line-height: 1.25;
 }
 .insight b {
-  font-size: 22px;
+  font-size: 17px;
   margin-top: 6px;
   white-space: nowrap;
   overflow: hidden;
@@ -1871,8 +1871,8 @@ p {
 }
 .fixed .day b {
   font-family: var(--font-display);
-  font-weight: 400;
-  font-size: 20px;
+  font-weight: 500;
+  font-size: 17px;
   line-height: 1;
 }
 .fixed .day small {
@@ -1975,6 +1975,6 @@ p {
 
 @media (min-width: 700px) {
   .big-number {
-    font-size: 56px;
+    font-size: 50px;
   }
 }
