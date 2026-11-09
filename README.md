@@ -10,30 +10,34 @@ Hecha con React + Vite + TypeScript, Dexie (IndexedDB), vite-plugin-pwa y lucide
 - **Movimientos**: lista del mes agrupada por día, filtro Todos / Gastos / Ingresos. Toca uno para editarlo o borrarlo.
 - **Categorías**: edita nombre y emoji, crea nuevas o borra cualquiera (incluso las base). Al borrar una categoría con movimientos, estos pasan a **“Sin categoría”** (nunca se pierden).
 - **Botón +**: hoja deslizable para registrar rápido monto (teclado numérico), categoría, lugar (con sugerencias de lugares usados antes) y fecha.
-- **Ajustes** (ícono arriba a la derecha): tema Claro / Oscuro / Auto, **respaldo en la nube** (Supabase) y **exportar / importar** respaldo en JSON.
+- **Ajustes** (ícono arriba a la derecha): tema Claro / Oscuro / Auto, **cuenta y sincronización** (Supabase) y **exportar / importar** respaldo en JSON.
 
-## Respaldo en la nube (Supabase)
+## Cuentas y sincronización (Supabase)
 
-La app sigue funcionando 100 % en el celular y sin internet. Además, si entras con tu correo:
+Cada persona tiene **su cuenta** (correo + contraseña) y sus datos viven en Supabase, en las tablas `categories` y `transactions` del proyecto **Ingresos**. Así ves lo mismo en el celular, en el navegador, en el navegador de otra app o en la compu.
 
-- Se guarda una **copia privada** de todos tus datos en la tabla `backups` de Supabase (una fila por usuario, protegida con RLS: solo tú la ves).
-- **Respaldo automático**: cada vez que agregas, editas o borras algo, se sube la copia unos segundos después. Si no hay internet, se sube cuando vuelve.
-- **Celular nuevo o datos borrados**: instala la app, entra con el mismo correo y toca **“Restaurar mi respaldo”**.
-- Protección: en un dispositivo nuevo el respaldo automático **no se activa** hasta que restaures o lo actives a mano, para no pisar tu copia de la nube con una app vacía. Además, Supabase guarda la versión anterior (`previous_data`, se rota cada 12 h como máximo).
+- **Local primero:** la app lee y escribe en el dispositivo (IndexedDB), así que abre al instante y funciona sin internet.
+- **Sincronización:** cada cambio se sube unos segundos después. Al abrir la app, al volver a ella, al recuperar internet y cada minuto, se descargan los cambios hechos en otros dispositivos.
+- **Conflictos:** si editas lo mismo en dos lugares, gana el cambio más reciente. El servidor también lo exige: un cambio viejo nunca pisa uno nuevo.
+- **Borrados:** se guardan como `deleted = true` para que lleguen a todos los dispositivos.
+- **Sin cuenta:** se puede usar sin cuenta (solo en ese dispositivo). Al crear la cuenta o entrar, lo que ya había se sube y se mezcla con la cuenta.
+- **Cerrar sesión:** sube lo pendiente y borra los datos de ese dispositivo (siguen en la cuenta).
+- **Seguridad:** RLS en ambas tablas, cada usuario solo ve y modifica sus filas. La clave publicable del código es pública por diseño; nunca uses la `service_role` en la app.
 
-El inicio de sesión es con un **código de 6 dígitos** que llega al correo (no con enlace), porque en iPhone el enlace abriría Safari y no la app instalada.
+### Esquema
 
-### Configuración en Supabase (una sola vez)
+| Tabla | Columnas principales |
+|---|---|
+| `categories` | `user_id`, `id`, `name`, `emoji`, `type` (expense/income), `sort_order`, `created_at`, `updated_at`, `deleted`, `synced_at` |
+| `transactions` | `user_id`, `id`, `type`, `amount_cents`, `category_id`, `place`, `date`, `created_at`, `updated_at`, `deleted`, `synced_at` |
 
-1. **Tabla**: la migración está en `supabase/migrations/`. Se aplica con la integración GitHub ↔ Supabase (activa *Deploy to production* en *Project Settings → Integrations → GitHub*) o pegándola en el *SQL Editor*. Es idempotente.
-2. **Plantillas de correo** (*Authentication → Emails → Templates*): en **Magic Link** y en **Confirm signup** agrega el código, por ejemplo:
-   ```html
-   <h2>Tu código para Ingresos</h2>
-   <p style="font-size:28px;font-weight:bold;letter-spacing:4px">{{ .Token }}</p>
-   ```
-3. Variables (opcional): por defecto la app usa el proyecto “Ingresos”. Para otro proyecto, define `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en Vercel (ver `.env.example`). La clave **publicable** es pública por diseño; nunca uses la `service_role` en la app.
+Llave primaria `(user_id, id)`. `updated_at` es la hora del cambio en el dispositivo y `synced_at` la hora del servidor (la app la usa para descargar solo lo nuevo). Las categorías base tienen ids fijos (`base-comida`, `base-sueldo`, …) para no duplicarse entre dispositivos.
 
-> El correo de Supabase por defecto tiene un límite bajo de envíos por hora; para uso personal alcanza. Si necesitas más, configura un SMTP propio en *Authentication → Emails → SMTP*.
+Las migraciones están en `supabase/migrations/` y se aplican solas con la integración GitHub ↔ Supabase al hacer push.
+
+### Configuración de Auth en Supabase
+
+En *Authentication → URL Configuration* pon como **Site URL** la dirección de Vercel (y agrégala en *Redirect URLs*), para que el enlace de confirmación del correo abra la app. Si prefieres que las cuentas no necesiten confirmar el correo, desactiva *Confirm email* en *Authentication → Sign In / Providers → Email*.
 
 ## Estructura
 
@@ -42,7 +46,7 @@ El inicio de sesión es con un **código de 6 dígitos** que llega al correo (no
 ├── vite.config.ts           # vite-plugin-pwa (autoUpdate + manifest + workbox)
 ├── vercel.json / netlify.toml
 ├── public/icons/            # 192, 512, maskable 512, apple-touch-icon, favicon
-├── supabase/migrations/     # tabla backups + RLS
+├── supabase/migrations/     # tablas categories y transactions + RLS
 └── src/
     ├── main.tsx             # entrada
     ├── App.tsx              # pestañas, barra inferior, botón +, hojas
@@ -51,7 +55,8 @@ El inicio de sesión es con un **código de 6 dígitos** que llega al correo (no
     │   ├── db.ts            # Dexie: esquema, categorías base, CRUD
     │   ├── backup.ts        # exportar / validar / importar JSON
     │   ├── supabase.ts      # cliente Supabase
-    │   ├── cloud.tsx        # login por código, respaldo automático, restaurar
+    │   ├── sync.ts          # sincronización IndexedDB ↔ Supabase
+    │   ├── account.tsx      # sesión, cuenta y sincronización automática
     │   ├── hooks.ts         # useCategories, useMonthTx, useTheme
     │   ├── types.ts
     │   └── utils.ts         # formato USD, fechas, parseo de montos, vibración
@@ -115,6 +120,6 @@ Después de abrirla una vez con internet, funciona completamente **sin conexión
 
 ## Notas
 
-- **Tus datos viven en el navegador del dispositivo.** Si borras los datos de Safari/Chrome o desinstalas la app, se pierden: exporta un respaldo de vez en cuando (Ajustes → Exportar). En iPhone, la app instalada y Safari tienen almacenamientos separados.
+- **Sin cuenta, los datos viven solo en ese navegador.** Si los borras o desinstalas la app, se pierden. Con cuenta quedan en Supabase y se recuperan al volver a entrar.
 - La vibración al guardar funciona en Android; iOS no permite vibrar desde la web.
 - Importar un respaldo **reemplaza** todos los datos actuales (pide confirmación).

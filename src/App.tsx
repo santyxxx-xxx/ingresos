@@ -1,7 +1,8 @@
 import { useCallback, useRef, useState } from 'react';
 import { ArrowLeftRight, PieChart, Plus, Tags } from 'lucide-react';
 import { FeedbackProvider } from './components/Feedback';
-import { CloudProvider } from './lib/cloud';
+import { AccountProvider, useAccount, useSkipLogin } from './lib/account';
+import { Welcome } from './components/Welcome';
 import { TransactionSheet } from './components/TransactionSheet';
 import { CategorySheet } from './components/CategorySheet';
 import { SettingsSheet } from './components/SettingsSheet';
@@ -22,11 +23,19 @@ const TABS: Array<{ id: Tab; label: string; Icon: typeof PieChart }> = [
 export default function App() {
   return (
     <FeedbackProvider>
-      <CloudProvider>
-        <Shell />
-      </CloudProvider>
+      <AccountProvider>
+        <Gate />
+      </AccountProvider>
     </FeedbackProvider>
   );
+}
+
+function Gate() {
+  const account = useAccount();
+  const [skip, setSkip] = useSkipLogin();
+  if (account.enabled && !account.ready) return <div className="backdrop-art" aria-hidden="true" />;
+  if (account.enabled && !account.session && !skip) return <Welcome onSkip={() => setSkip(true)} />;
+  return <Shell />;
 }
 
 function Shell() {

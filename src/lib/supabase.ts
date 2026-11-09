@@ -8,6 +8,6 @@ const key = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_0pfOccP65E
 export const supabase: SupabaseClient | null =
   url && key
     ? createClient(url, key, {
-        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: false }
+        auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true }
       })
     : null;

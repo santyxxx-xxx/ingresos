@@ -3,7 +3,7 @@ import { Check, Trash2 } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { Segmented } from './Segmented';
 import { useFeedback } from './Feedback';
-import { db, deleteCategory, saveCategory } from '../lib/db';
+import { countTxInCategory, deleteCategory, saveCategory } from '../lib/db';
 import type { Category, TxType } from '../lib/types';
 import { haptic } from '../lib/utils';
 
@@ -56,7 +56,7 @@ export function CategorySheet({ open, onClose, editing, defaultType }: Props) {
 
   const remove = async () => {
     if (!editing) return;
-    const count = await db.transactions.where('categoryId').equals(editing.id).count();
+    const count = await countTxInCategory(editing.id);
     const ok = await confirm({
       title: `Borrar “${editing.name}”`,
       message:

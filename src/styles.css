@@ -1262,6 +1262,76 @@ p {
   color: var(--ink-2);
 }
 
+/* ---------- Bienvenida / cuenta ---------- */
+.welcome {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: calc(var(--sat) + 32px) calc(var(--sar) + 20px) calc(var(--sab) + 24px) calc(var(--sal) + 20px);
+  display: flex;
+}
+.welcome-inner {
+  width: 100%;
+  max-width: 420px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  text-align: center;
+}
+.welcome-logo {
+  width: 72px;
+  height: 72px;
+  border-radius: 22px;
+  margin: 0 auto;
+  box-shadow: 0 14px 30px -12px rgba(47, 93, 80, 0.6);
+}
+.welcome h1 {
+  font-size: 34px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+.welcome-sub {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--ink-2);
+  margin: -6px 8px 4px;
+}
+.welcome-skip {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink-2);
+  padding: 12px;
+}
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  text-align: left;
+}
+.pw-field {
+  position: relative;
+}
+.pw-field .input {
+  padding-right: 52px;
+}
+.pw-field .icon-btn {
+  position: absolute;
+  right: 5px;
+  top: 5px;
+  color: var(--ink-3);
+}
+.info-text {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--accent-ink);
+  background: var(--accent-soft);
+  border-radius: var(--r-sm);
+  padding: 10px 12px;
+}
+
 /* ---------- Toast ---------- */
 .toast-host {
   position: fixed;

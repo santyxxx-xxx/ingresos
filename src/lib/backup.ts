@@ -2,13 +2,24 @@ import { db } from './db';
 import type { BackupFile, Category, Transaction } from './types';
 import { todayISO } from './utils';
 
+function stripSync<T extends { dirty: unknown; deleted: unknown }>(row: T): Omit<T, 'dirty' | 'deleted'> {
+  const copy: Partial<T> = { ...row };
+  delete copy.dirty;
+  delete copy.deleted;
+  return copy as Omit<T, 'dirty' | 'deleted'>;
+}
+
 export async function buildBackup(): Promise<BackupFile> {
   return {
     app: 'ingresos',
     version: 1,
     exportedAt: new Date().toISOString(),
-    categories: await db.categories.toArray(),
-    transactions: await db.transactions.toArray()
+    categories: (await db.categories.toArray())
+      .filter((c) => !c.deleted)
+      .map(stripSync),
+    transactions: (await db.transactions.toArray())
+      .filter((t) => !t.deleted)
+      .map(stripSync)
   };
 }
 
@@ -89,12 +100,26 @@ export function validateBackup(data: unknown): BackupFile {
   return { app: 'ingresos', version: 1, exportedAt: d.exportedAt ?? '', categories, transactions };
 }
 
-/** Reemplaza todos los datos del dispositivo por los del respaldo */
+/**
+ * Reemplaza todos los datos por los del respaldo. Lo que no está en el archivo se
+ * marca como borrado (y se sincroniza), lo del archivo se marca como cambio nuevo.
+ */
 export async function restoreBackup(b: BackupFile) {
+  const now = Date.now();
   await db.transaction('rw', db.categories, db.transactions, async () => {
-    await db.transactions.clear();
-    await db.categories.clear();
-    await db.categories.bulkAdd(b.categories);
-    await db.transactions.bulkAdd(b.transactions);
+    const catIds = new Set(b.categories.map((c) => c.id));
+    const txIds = new Set(b.transactions.map((t) => t.id));
+    await db.categories
+      .filter((c) => !catIds.has(c.id) && !c.deleted)
+      .modify({ deleted: 1, dirty: 1, updatedAt: now });
+    await db.transactions
+      .filter((t) => !txIds.has(t.id) && !t.deleted)
+      .modify({ deleted: 1, dirty: 1, updatedAt: now });
+    await db.categories.bulkPut(
+      b.categories.map((c) => ({ ...c, updatedAt: now, deleted: 0 as const, dirty: 1 as const }))
+    );
+    await db.transactions.bulkPut(
+      b.transactions.map((t) => ({ ...t, updatedAt: now, deleted: 0 as const, dirty: 1 as const }))
+    );
   });
 }

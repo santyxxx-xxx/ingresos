@@ -63,7 +63,7 @@ export function TransactionSheet({ open, onClose, editing, defaultType }: Props)
     if (!open) return [] as string[];
     const freq = new Map<string, { label: string; n: number }>();
     await db.transactions.each((t) => {
-      if (!t.place) return;
+      if (!t.place || t.deleted) return;
       const k = normalizePlace(t.place);
       const cur = freq.get(k);
       if (cur) cur.n++;

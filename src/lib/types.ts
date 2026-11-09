@@ -1,6 +1,16 @@
 export type TxType = 'expense' | 'income';
 
-export interface Category {
+/** Campos de sincronización comunes */
+interface Syncable {
+  /** ms epoch del último cambio (gana el más reciente) */
+  updatedAt: number;
+  /** 1 = borrado (se conserva para propagar el borrado a otros dispositivos) */
+  deleted: 0 | 1;
+  /** 1 = tiene cambios sin subir a la nube */
+  dirty: 0 | 1;
+}
+
+export interface Category extends Syncable {
   id: string;
   name: string;
   emoji: string;
@@ -9,7 +19,7 @@ export interface Category {
   createdAt: number;
 }
 
-export interface Transaction {
+export interface Transaction extends Syncable {
   id: string;
   type: TxType;
   /** Monto en centavos (entero) para evitar errores de redondeo */
@@ -26,6 +36,6 @@ export interface BackupFile {
   app: 'ingresos';
   version: 1;
   exportedAt: string;
-  categories: Category[];
-  transactions: Transaction[];
+  categories: Array<Omit<Category, 'dirty' | 'deleted' | 'updatedAt'> & Partial<Syncable>>;
+  transactions: Array<Omit<Transaction, 'dirty' | 'deleted' | 'updatedAt'> & Partial<Syncable>>;
 }

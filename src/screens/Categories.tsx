@@ -21,6 +21,7 @@ export function Categories({ onEdit, onNew, onSettings }: Props) {
     const m = new Map<string, number>();
     let none = 0;
     await db.transactions.where('type').equals(type).each((t) => {
+      if (t.deleted) return;
       if (t.categoryId) m.set(t.categoryId, (m.get(t.categoryId) ?? 0) + 1);
       else none++;
     });

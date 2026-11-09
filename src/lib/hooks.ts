@@ -6,7 +6,10 @@ import type { Category, Transaction } from './types';
 export const UNCATEGORIZED = { name: 'Sin categoría', emoji: '❔' };
 
 export function useCategories() {
-  const list = useLiveQuery(() => db.categories.orderBy('order').toArray(), []);
+  const list = useLiveQuery(
+    () => db.categories.orderBy('order').filter((c) => !c.deleted).toArray(),
+    []
+  );
   const map = useMemo(() => {
     const m = new Map<string, Category>();
     (list ?? []).forEach((c) => m.set(c.id, c));
