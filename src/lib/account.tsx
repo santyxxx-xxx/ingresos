@@ -9,6 +9,9 @@ interface AccountCtx {
   /** Nombre para el saludo (guardado en la cuenta o tomado de Google) */
   name: string | null;
   setName: (name: string) => Promise<void>;
+  /** true si hay que mostrar el tutorial automáticamente (cuentas nuevas que no lo han visto) */
+  showTutorialOnStart: boolean;
+  markTutorialSeen: () => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   /** 'session' = ya entró; 'confirm' = debe confirmar el correo primero */
@@ -17,6 +20,9 @@ interface AccountCtx {
 }
 
 const Ctx = createContext<AccountCtx | null>(null);
+
+/** Fecha desde la que las cuentas nuevas ven el tutorial al entrar */
+const TUTORIAL_SINCE = '2026-11-11T15:50:00';
 
 export function useAccount() {
   const c = useContext(Ctx);
@@ -82,9 +88,31 @@ export function AccountProvider({ children }: { children: ReactNode }) {
     '';
   const name = rawName.trim() ? rawName.trim().split(/\s+/)[0] : null;
 
+  // El tutorial se muestra solo a cuentas creadas desde que existe (las anteriores ya conocen la app)
+  // y que aún no lo vieron. Se guarda en la propia cuenta, así no vuelve a salir en otro dispositivo.
+  const createdAt = session?.user.created_at ?? '';
+  const showTutorialOnStart = !!session && createdAt >= TUTORIAL_SINCE && meta.tutorial_seen !== true;
+
+  const markTutorialSeen = useCallback(async () => {
+    const { data, error } = await supabase.auth.updateUser({ data: { tutorial_seen: true } });
+    if (!error && data.user) setSession((s) => (s ? { ...s, user: data.user! } : s));
+  }, []);
+
   return (
     <Ctx.Provider
-      value={{ ready, session, email: session?.user.email ?? null, name, setName, signInWithGoogle, signIn, signUp, signOut }}
+      value={{
+        ready,
+        session,
+        email: session?.user.email ?? null,
+        name,
+        setName,
+        showTutorialOnStart,
+        markTutorialSeen,
+        signInWithGoogle,
+        signIn,
+        signUp,
+        signOut
+      }}
     >
       {children}
     </Ctx.Provider>

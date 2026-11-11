@@ -22,7 +22,8 @@ Hecha con React + Vite + TypeScript y Supabase (Auth + Postgres). Estilo *liquid
 - **Movimientos:** lista del mes por día, filtro por sección y por tipo, y acceso a **Recurrentes**.
 - **Recurrentes:** arriendo, suscripciones, mesada, sueldo… se registran solos **cada mes** (día del mes) o **cada semana** (día de la semana). Se pueden pausar. También desde el formulario con “Repetir”.
 - **Categorías → subcategorías:** p. ej. Comida › Supermercado. Cada categoría puede tener presupuesto mensual. Se pueden crear desde la pestaña Categorías **o directamente al registrar un movimiento** (igual que las secciones).
-- **Ajustes:** nombre, cerrar sesión y copia en JSON (exportar / importar).
+- **Tutorial:** 9 pantallas deslizables con botón Omitir. Sale solo la primera vez a cuentas nuevas (guardado en `user_metadata.tutorial_seen`) y siempre está en Ajustes → Ver tutorial.
+- **Ajustes:** ver tutorial, nombre, cerrar sesión y copia en JSON (exportar / importar).
 
 ## Variables de entorno (Vercel)
 

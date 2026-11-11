@@ -10,6 +10,7 @@ import { SettingsSheet } from './components/SettingsSheet';
 import { GroupSheet } from './components/GroupSheet';
 import { RecurringSheet } from './components/RecurringSheet';
 import { NameStep } from './components/NameStep';
+import { Tutorial } from './components/Tutorial';
 import { Dashboard } from './screens/Dashboard';
 import { Movements } from './screens/Movements';
 import { Categories } from './screens/Categories';
@@ -47,6 +48,9 @@ function Gate() {
 }
 
 function Shell() {
+  const account = useAccount();
+  // Cuentas nuevas: el tutorial aparece solo la primera vez
+  const [tutorialOpen, setTutorialOpen] = useState(() => account.showTutorialOnStart);
   const [tab, setTab] = useState<Tab>('home');
   const [dir, setDir] = useState<'left' | 'right' | 'fade'>('fade');
   const [month, setMonth] = useState(currentMonth());
@@ -90,6 +94,14 @@ function Shell() {
   const closeGroup = useCallback(() => setGroupSheet((s) => ({ ...s, open: false })), []);
   const closeRec = useCallback(() => setRecOpen(false), []);
   const openSettings = () => setSettingsOpen(true);
+  const closeTutorial = () => {
+    setTutorialOpen(false);
+    if (account.showTutorialOnStart) account.markTutorialSeen();
+  };
+  const openTutorial = () => {
+    setSettingsOpen(false);
+    window.setTimeout(() => setTutorialOpen(true), 250);
+  };
 
   const activeIdx = TABS.findIndex((t) => t.id === tab);
 
@@ -160,7 +172,8 @@ function Shell() {
         defaultType={catSheet.type}
         parent={catSheet.parent}
       />
-      <SettingsSheet open={settingsOpen} onClose={closeSettings} />
+      <SettingsSheet open={settingsOpen} onClose={closeSettings} onTutorial={openTutorial} />
+      <Tutorial open={tutorialOpen} onClose={closeTutorial} />
       <GroupSheet open={groupSheet.open} onClose={closeGroup} editing={groupSheet.editing} />
       <RecurringSheet open={recOpen} onClose={closeRec} />
     </>

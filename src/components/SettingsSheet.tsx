@@ -1,5 +1,5 @@
 import { useRef } from 'react';
-import { Download, Upload, ShieldCheck } from 'lucide-react';
+import { BookOpen, Download, Upload, ShieldCheck } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { AccountSection } from './AccountSection';
 import { useFeedback } from './Feedback';
@@ -10,9 +10,10 @@ import { haptic } from '../lib/utils';
 interface Props {
   open: boolean;
   onClose: () => void;
+  onTutorial: () => void;
 }
 
-export function SettingsSheet({ open, onClose }: Props) {
+export function SettingsSheet({ open, onClose, onTutorial }: Props) {
   const { confirm, toast } = useFeedback();
   const { uid, refresh } = useData();
   const fileRef = useRef<HTMLInputElement>(null);
@@ -56,6 +57,16 @@ export function SettingsSheet({ open, onClose }: Props) {
 
   return (
     <Sheet open={open} onClose={onClose} title="Ajustes">
+      <button className="tutorial-entry glass pressable" onClick={onTutorial}>
+        <span className="badge ok">
+          <BookOpen size={19} strokeWidth={1.75} />
+        </span>
+        <span className="info">
+          <span className="title">Ver tutorial</span>
+          <span className="meta">Cómo usar la app, paso a paso</span>
+        </span>
+      </button>
+
       <AccountSection />
 
       <div>
