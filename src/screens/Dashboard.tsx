@@ -453,7 +453,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
           {d.count === 0
             ? 'Aún no hay movimientos este mes.'
             : d.balance >= 0
-              ? `Te queda el ${d.income ? Math.round((d.balance / d.income) * 100) : 0}% de lo que entró.`
+              ? `Te queda el ${d.income ? Math.round((d.balance / d.income) * 100) : 0}% de lo que ingresó.`
               : 'Este mes estás gastando más de lo que entra.'}
         </p>
         {(d.transfersIn > 0 || d.transfersOut > 0) && (
