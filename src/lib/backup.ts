@@ -126,6 +126,8 @@ export async function parseBackup(file: File): Promise<BackupFile> {
     .filter((r) => r && typeof r.id === 'string' && isType(r.type) && typeof r.amount === 'number' && r.amount > 0)
     .map((r) => ({
       id: r.id as string,
+      frequency: (r.frequency === 'weekly' ? 'weekly' : 'monthly') as Recurring['frequency'],
+      dayOfWeek: typeof r.dayOfWeek === 'number' && r.dayOfWeek >= 1 && r.dayOfWeek <= 7 ? r.dayOfWeek : null,
       type: r.type as Recurring['type'],
       amount: Math.round(r.amount as number),
       categoryId: typeof r.categoryId === 'string' && catIds.has(r.categoryId) ? r.categoryId : null,
@@ -196,6 +198,10 @@ export async function restoreBackup(uid: string, b: BackupFile) {
       start_date: r.startDate,
       active: r.active,
       section_id: r.sectionId,
+      frequency: r.frequency,
+      day_of_week: r.frequency === 'weekly' ? r.dayOfWeek : null,
+      // semanales: se retoma desde hoy sin duplicar (id fijo por fecha)
+      last_date: r.frequency === 'weekly' ? todayISO() : null,
       // los meses anteriores vienen en la copia; el actual se genera de nuevo sin duplicar (id fijo por mes)
       last_month: `${shiftMonth(todayISO().slice(0, 7), -1)}-01`
     }))

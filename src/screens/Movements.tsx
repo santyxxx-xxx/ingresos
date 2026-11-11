@@ -5,7 +5,7 @@ import { MonthPicker } from '../components/MonthPicker';
 import { Segmented } from '../components/Segmented';
 import { TxRow } from '../components/TxRow';
 import { SectionFilter, matchesSection } from '../components/SectionFilter';
-import { useData, useMonthTx } from '../lib/data';
+import { isTransfer, transferMap, useData, useMonthTx } from '../lib/data';
 import type { Transaction } from '../lib/types';
 import { dayLabel, money } from '../lib/utils';
 
@@ -25,23 +25,35 @@ export function Movements({ month, setMonth, onEdit, onSettings, onRecurring }: 
   const [filter, setFilter] = useState<Filter>('all');
   const [section, setSection] = useState('all');
 
+  const tmap = useMemo(() => transferMap(txs ?? []), [txs]);
   const { groups, income, expense } = useMemo(() => {
+    const all = section === 'all';
     const list = (txs ?? [])
-      .filter((t) => (filter === 'all' || t.type === filter) && matchesSection(t.sectionId, section))
+      .filter((t) => {
+        if (isTransfer(t)) {
+          // En Total la transferencia aparece una vez; en una sección, el lado que le toca
+          if (filter !== 'all') return false;
+          return all ? t.id.endsWith('-out') : matchesSection(t.sectionId, section);
+        }
+        return (filter === 'all' || t.type === filter) && matchesSection(t.sectionId, section);
+      })
       .sort((a, b) => (a.date === b.date ? b.createdAt.localeCompare(a.createdAt) : a.date < b.date ? 1 : -1));
     const g: Array<{ date: string; items: Transaction[]; net: number }> = [];
     let inc = 0;
     let exp = 0;
     for (const t of list) {
-      if (t.type === 'income') inc += t.amount;
-      else exp += t.amount;
+      const moves = !isTransfer(t) || !all;
+      if (!isTransfer(t)) {
+        if (t.type === 'income') inc += t.amount;
+        else exp += t.amount;
+      }
       let last = g[g.length - 1];
       if (!last || last.date !== t.date) {
         last = { date: t.date, items: [], net: 0 };
         g.push(last);
       }
       last.items.push(t);
-      last.net += t.type === 'income' ? t.amount : -t.amount;
+      if (moves) last.net += t.type === 'income' ? t.amount : -t.amount;
     }
     return { groups: g, income: inc, expense: exp };
   }, [txs, filter, section]);
@@ -110,7 +122,14 @@ export function Movements({ month, setMonth, onEdit, onSettings, onRecurring }: 
           </div>
           <div className="tx-list">
             {g.items.map((t) => (
-              <TxRow key={t.id} tx={t} cats={cats} onClick={() => onEdit(t)} />
+              <TxRow
+                key={t.id}
+                tx={t}
+                cats={cats}
+                onClick={() => onEdit(t)}
+                transfer={isTransfer(t) ? tmap.get(t.id.replace(/-(out|in)$/, '')) : undefined}
+                totalView={section === 'all'}
+              />
             ))}
           </div>
         </section>

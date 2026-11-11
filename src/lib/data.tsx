@@ -1,6 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { friendlyError, supabase } from './supabase';
-import type { Category, Group, Recurring, Transaction, TxType } from './types';
+import type { Category, Frequency, Group, Recurring, Transaction, TxType } from './types';
+import { uid as newId } from './utils';
 import { todayISO } from './utils';
 
 /* ---------- Mapeo filas de Supabase <-> app ---------- */
@@ -43,12 +44,14 @@ export interface RecRow {
   start_date: string;
   active: boolean;
   section_id: string | null;
+  frequency: Frequency | null;
+  day_of_week: number | null;
 }
 
 export const GROUP_COLS = 'id,name,emoji,sort_order';
 export const CAT_COLS = 'id,name,emoji,type,parent_id,group_id,monthly_budget_cents,sort_order,created_at';
 export const TX_COLS = 'id,type,amount_cents,category_id,place,date,created_at,recurring_id,section_id';
-export const REC_COLS = 'id,type,amount_cents,category_id,place,day_of_month,start_date,active,section_id';
+export const REC_COLS = 'id,type,amount_cents,category_id,place,day_of_month,start_date,active,section_id,frequency,day_of_week';
 
 export const groupFromRow = (r: GroupRow): Group => ({ id: r.id, name: r.name, emoji: r.emoji, order: r.sort_order });
 
@@ -78,6 +81,8 @@ export const txFromRow = (r: TxRow): Transaction => ({
 
 export const recFromRow = (r: RecRow): Recurring => ({
   id: r.id,
+  frequency: r.frequency === 'weekly' ? 'weekly' : 'monthly',
+  dayOfWeek: r.day_of_week ?? null,
   type: r.type,
   amount: Number(r.amount_cents),
   categoryId: r.category_id,
@@ -96,6 +101,39 @@ export function fail(e: unknown): never {
 
 export type RecurringInput = Omit<Recurring, 'id'> & { id?: string };
 
+/* ---------- Transferencias entre secciones ---------- */
+
+export const TRANSFER_OUT = 'sys-transfer-out';
+export const TRANSFER_IN = 'sys-transfer-in';
+
+export interface TransferInput {
+  /** id base (trf-…) al editar una transferencia existente */
+  base?: string;
+  amount: number;
+  from: string;
+  to: string;
+  date: string;
+  note: string;
+}
+
+export const isSystemCategory = (id: string | null) => !!id && id.startsWith('sys-');
+export const isTransfer = (t: Pick<Transaction, 'id'>) => t.id.startsWith('trf-');
+export const transferBase = (id: string) => id.replace(/-(out|in)$/, '');
+
+/** Para cada transferencia: sección de origen y de destino */
+export function transferMap(list: Transaction[]) {
+  const m = new Map<string, { from: string | null; to: string | null }>();
+  for (const t of list) {
+    if (!isTransfer(t)) continue;
+    const base = transferBase(t.id);
+    const cur = m.get(base) ?? { from: null, to: null };
+    if (t.id.endsWith('-out')) cur.from = t.sectionId;
+    else cur.to = t.sectionId;
+    m.set(base, cur);
+  }
+  return m;
+}
+
 interface DataCtx {
   uid: string;
   groups: Group[];
@@ -112,6 +150,10 @@ interface DataCtx {
     t: Pick<Transaction, 'type' | 'amount' | 'categoryId' | 'place' | 'date' | 'sectionId'> & { id?: string }
   ) => Promise<void>;
   deleteTransaction: (id: string) => Promise<void>;
+  /** Varios movimientos de una vez (ingreso dividido entre secciones) */
+  addTransactions: (rows: Array<Pick<Transaction, 'type' | 'amount' | 'categoryId' | 'place' | 'date' | 'sectionId'>>) => Promise<void>;
+  saveTransfer: (t: TransferInput) => Promise<void>;
+  deleteTransfer: (base: string) => Promise<void>;
   saveCategory: (c: {
     id?: string;
     name: string;
@@ -230,6 +272,76 @@ export function DataProvider({ uid, children }: { uid: string; children: ReactNo
     [uid, bump]
   );
 
+  const addTransactions: DataCtx['addTransactions'] = useCallback(
+    async (rows) => {
+      const { error } = await supabase.from('transactions').insert(
+        rows.map((t) => ({
+          user_id: uid,
+          type: t.type,
+          amount_cents: t.amount,
+          category_id: t.categoryId,
+          place: t.place,
+          date: t.date,
+          section_id: t.sectionId
+        }))
+      );
+      if (error) fail(error);
+      bump();
+    },
+    [uid, bump]
+  );
+
+  /** Las transferencias usan dos categorías ocultas del sistema (una de salida y una de entrada) */
+  const ensureTransferCategories = useCallback(async () => {
+    if (catMap.has(TRANSFER_OUT) && catMap.has(TRANSFER_IN)) return;
+    const { error } = await supabase.from('categories').upsert(
+      [
+        { user_id: uid, id: TRANSFER_OUT, name: 'Transferencia', emoji: '↔️', type: 'expense', sort_order: 9999 },
+        { user_id: uid, id: TRANSFER_IN, name: 'Transferencia', emoji: '↔️', type: 'income', sort_order: 9999 }
+      ],
+      { onConflict: 'user_id,id', ignoreDuplicates: true }
+    );
+    if (error) fail(error);
+  }, [uid, catMap]);
+
+  const saveTransfer = useCallback(
+    async (t: TransferInput) => {
+      await ensureTransferCategories();
+      const base = t.base ?? `trf-${newId()}`;
+      const common = { amount_cents: t.amount, place: t.note, date: t.date };
+      const out = { ...common, type: 'expense', category_id: TRANSFER_OUT, section_id: t.from };
+      const inn = { ...common, type: 'income', category_id: TRANSFER_IN, section_id: t.to };
+      if (t.base) {
+        const r1 = await supabase.from('transactions').update(out).eq('user_id', uid).eq('id', `${base}-out`);
+        if (r1.error) fail(r1.error);
+        const r2 = await supabase.from('transactions').update(inn).eq('user_id', uid).eq('id', `${base}-in`);
+        if (r2.error) fail(r2.error);
+      } else {
+        const { error } = await supabase.from('transactions').insert([
+          { ...out, user_id: uid, id: `${base}-out` },
+          { ...inn, user_id: uid, id: `${base}-in` }
+        ]);
+        if (error) fail(error);
+      }
+      await loadMeta();
+      bump();
+    },
+    [uid, ensureTransferCategories, loadMeta, bump]
+  );
+
+  const deleteTransfer = useCallback(
+    async (base: string) => {
+      const { error } = await supabase
+        .from('transactions')
+        .delete()
+        .eq('user_id', uid)
+        .in('id', [`${base}-out`, `${base}-in`]);
+      if (error) fail(error);
+      bump();
+    },
+    [uid, bump]
+  );
+
   const saveCategory: DataCtx['saveCategory'] = useCallback(
     async (c) => {
       const isRoot = !c.parentId;
@@ -328,7 +440,9 @@ export function DataProvider({ uid, children }: { uid: string; children: ReactNo
         day_of_month: r.dayOfMonth,
         start_date: r.startDate,
         active: r.active,
-        section_id: r.sectionId
+        section_id: r.sectionId,
+        frequency: r.frequency,
+        day_of_week: r.frequency === 'weekly' ? r.dayOfWeek : null
       };
       const { error } = r.id
         ? await supabase.from('recurring').update(row).eq('user_id', uid).eq('id', r.id)
@@ -366,6 +480,9 @@ export function DataProvider({ uid, children }: { uid: string; children: ReactNo
         refresh,
         saveTransaction,
         deleteTransaction,
+        addTransactions,
+        saveTransfer,
+        deleteTransfer,
         saveCategory,
         deleteCategory,
         saveGroup,
@@ -488,7 +605,7 @@ export const UNCATEGORIZED = { name: 'Sin categoría', emoji: '❔' };
 export const NO_GROUP = { id: '__nogroup__', name: 'Sin grupo', emoji: '📂' };
 
 export function topLevel(categories: Category[], type: TxType) {
-  return categories.filter((c) => c.type === type && !c.parentId);
+  return categories.filter((c) => c.type === type && !c.parentId && !isSystemCategory(c.id));
 }
 
 export function childrenOf(categories: Category[], id: string) {

@@ -5,10 +5,20 @@ import { MonthPicker } from '../components/MonthPicker';
 import { Donut, type Slice } from '../components/Donut';
 import { TxRow } from '../components/TxRow';
 import { useAccount } from '../lib/account';
-import { UNCATEGORIZED, catInfo, rootOf, useData, useTxRange } from '../lib/data';
+import { UNCATEGORIZED, catInfo, isTransfer, rootOf, transferMap, useData, useTxRange } from '../lib/data';
 import { SectionFilter, matchesSection } from '../components/SectionFilter';
 import type { Category, Transaction } from '../lib/types';
-import { currentMonth, money, moneyParts, monthLabel, normalizePlace, shiftMonth, todayISO } from '../lib/utils';
+import {
+  WEEKDAYS,
+  currentMonth,
+  money,
+  moneyParts,
+  monthLabel,
+  normalizePlace,
+  shiftMonth,
+  todayISO,
+  weekdayDatesInMonth
+} from '../lib/utils';
 
 interface Props {
   month: string;
@@ -230,7 +240,12 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
 
   const d = useMemo(() => {
     const all = range ?? [];
-    const filtered = all.filter((t) => matchesSection(t.sectionId, group));
+    // Las transferencias no son gasto ni ingreso: se cuentan aparte
+    const inView = all.filter((t) => matchesSection(t.sectionId, group));
+    const filtered = inView.filter((t) => !isTransfer(t));
+    const curTransfers = inView.filter((t) => isTransfer(t) && t.date.startsWith(month));
+    const transfersIn = group === 'all' ? 0 : sum(curTransfers.filter((t) => t.type === 'income'));
+    const transfersOut = group === 'all' ? 0 : sum(curTransfers.filter((t) => t.type === 'expense'));
     const cur = filtered.filter((t) => t.date.startsWith(month));
     const prev = filtered.filter((t) => t.date.startsWith(prevMonth));
     const exp = cur.filter((t) => t.type === 'expense');
@@ -309,10 +324,37 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
       })
       .sort((a, b) => b.pct - a.pct);
 
+    // Por sección (para la vista Total)
+    const monthAll = all.filter((t) => t.date.startsWith(month));
+    const sectionIds = [...groups.map((g) => g.id as string | null)];
+    if (monthAll.some((t) => !t.sectionId)) sectionIds.push(null);
+    const bySection = sectionIds
+      .map((sid) => {
+        const list = monthAll.filter((t) => (t.sectionId ?? null) === sid);
+        const real = list.filter((t) => !isTransfer(t));
+        const trf = list.filter((t) => isTransfer(t));
+        const inc = sum(real.filter((t) => t.type === 'income'));
+        const ex = sum(real.filter((t) => t.type === 'expense'));
+        const tIn = sum(trf.filter((t) => t.type === 'income'));
+        const tOut = sum(trf.filter((t) => t.type === 'expense'));
+        return { sid, income: inc, expense: ex, tIn, tOut, balance: inc - ex + tIn - tOut, count: list.length };
+      })
+      .filter((s) => s.sid !== null || s.count > 0);
+
+    const tmap = transferMap(monthAll);
+    const recentList = (group === 'all' ? inView.filter((t) => !t.id.endsWith('-in')) : inView)
+      .filter((t) => t.date.startsWith(month))
+      .slice(0, 5);
+
     return {
       income,
       expense,
-      balance: income - expense,
+      balance: income - expense + transfersIn - transfersOut,
+      transfersIn,
+      transfersOut,
+      bySection,
+      tmap,
+      recentList,
       prevIncome: sum(prevInc),
       prevExpense: sum(prevExp),
       expenseRank: rankByRoot(exp, catMap, expense),
@@ -328,7 +370,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
       changes,
       budgets
     };
-  }, [range, group, catMap, categories, month, prevMonth, from, isCurrent]);
+  }, [range, group, catMap, categories, groups, month, prevMonth, from, isCurrent]);
 
   // Fijos del mes (solo mes actual)
   const fixed = useMemo(() => {
@@ -338,9 +380,22 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
     return recurring
       .filter((r) => r.active && matchesSection(r.sectionId, group))
       .map((r) => {
+        if (r.frequency === 'weekly' && r.dayOfWeek) {
+          const dates = weekdayDatesInMonth(month, r.dayOfWeek, r.startDate);
+          const doneCount = dates.filter((x) => x <= todayISO()).length;
+          return {
+            r,
+            day: dates.length ? Number(dates[0].slice(8, 10)) : 99,
+            done: dates.length > 0 && doneCount === dates.length,
+            times: dates.length,
+            doneCount
+          };
+        }
         const day = Math.min(r.dayOfMonth, dim);
-        return { r, day, done: day <= today && r.startDate <= todayISO() };
+        const done = day <= today && r.startDate <= todayISO();
+        return { r, day, done, times: 1, doneCount: done ? 1 : 0 };
       })
+      .filter((f) => f.times > 0)
       .sort((a, b) => a.day - b.day);
   }, [recurring, isCurrent, month, group]);
 
@@ -359,6 +414,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
   const budgetTotal = d.budgets.reduce((a, b) => a + b.budget, 0);
   const budgetSpent = d.budgets.reduce((a, b) => a + b.spent, 0);
   const pendingFixed = fixed.filter((f) => !f.done);
+  const sectionName = (sid: string | null) => (sid ? groupMap.get(sid) : undefined);
 
   return (
     <div className="screen-inner">
@@ -400,6 +456,14 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
               ? `Te queda el ${d.income ? Math.round((d.balance / d.income) * 100) : 0}% de lo que entró.`
               : 'Este mes estás gastando más de lo que entra.'}
         </p>
+        {(d.transfersIn > 0 || d.transfersOut > 0) && (
+          <p className="balance-note transfer-note">
+            ↔️ Transferencias:
+            {d.transfersIn > 0 && <span className="c-income"> recibiste {money(d.transfersIn)}</span>}
+            {d.transfersIn > 0 && d.transfersOut > 0 && ' ·'}
+            {d.transfersOut > 0 && <span> enviaste {money(d.transfersOut)}</span>}
+          </p>
+        )}
       </section>
 
       <div className={`stat-row ${dim}`}>
@@ -424,6 +488,41 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
           <Delta now={d.expense} before={d.prevExpense} goodWhenUp={false} label={prevLabel} />
         </div>
       </div>
+
+      {group === 'all' && d.bySection.length >= 2 && (
+        <section className="card glass">
+          <div className="card-title">
+            <h2>Por sección</h2>
+            <span className="card-aside">Toca para ver el detalle</span>
+          </div>
+          <div className="section-list">
+            {d.bySection.map((s) => {
+              const g = sectionName(s.sid);
+              return (
+                <button
+                  key={s.sid ?? 'none'}
+                  className="section-row pressable"
+                  onClick={() => setGroup(s.sid ?? 'none')}
+                >
+                  <span className="badge">{g?.emoji ?? '📂'}</span>
+                  <span className="info">
+                    <span className="title">{g?.name ?? 'Sin sección'}</span>
+                    <span className="meta">
+                      Entra <b className="c-income">{money(s.income + s.tIn)}</b> · Sale{' '}
+                      <b className="c-expense">{money(s.expense + s.tOut)}</b>
+                      {(s.tIn > 0 || s.tOut > 0) && ' · incluye transferencias'}
+                    </span>
+                  </span>
+                  <span className={`section-bal display ${s.balance < 0 ? 'c-expense' : ''}`}>
+                    {s.balance < 0 ? '−' : ''}
+                    {money(Math.abs(s.balance))}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       {range !== undefined && d.count === 0 && (
         <section className="card glass empty">
@@ -583,21 +682,35 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
             </span>
           </div>
           <div className="fixed-list">
-            {fixed.map(({ r, day, done }) => {
+            {fixed.map(({ r, day, done, times, doneCount }) => {
               const c = catInfo(catMap, r.categoryId);
+              const weekly = r.frequency === 'weekly' && r.dayOfWeek;
               return (
                 <div className={`fixed ${done ? 'done' : ''}`} key={r.id}>
                   <span className="day">
-                    <b>{day}</b>
-                    <small>{MONTHS_SHORT[Number(month.slice(5, 7)) - 1]}</small>
+                    {weekly ? (
+                      <>
+                        <b>{times}×</b>
+                        <small>{WEEKDAYS[r.dayOfWeek!].slice(0, 3)}</small>
+                      </>
+                    ) : (
+                      <>
+                        <b>{day}</b>
+                        <small>{MONTHS_SHORT[Number(month.slice(5, 7)) - 1]}</small>
+                      </>
+                    )}
                   </span>
                   <span className="info">
                     <span className="title">{r.place || c.name}</span>
-                    <span className="meta">{done ? 'Registrado' : 'Pendiente'} · {c.name}</span>
+                    <span className="meta">
+                      {weekly
+                        ? `Cada ${WEEKDAYS[r.dayOfWeek!]} · ${doneCount} de ${times} registrados`
+                        : `${done ? 'Registrado' : 'Pendiente'} · ${c.name}`}
+                    </span>
                   </span>
                   <span className={`amount ${r.type === 'income' ? 'c-income' : ''}`}>
                     {r.type === 'income' ? '+' : '−'}
-                    {money(r.amount)}
+                    {money(r.amount * times)}
                   </span>
                 </div>
               );
@@ -638,7 +751,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
         </section>
       )}
 
-      {d.recent.length > 0 && (
+      {d.recentList.length > 0 && (
         <section className="card glass" style={{ paddingBottom: 8 }}>
           <div className="card-title" style={{ marginBottom: 4 }}>
             <h2>Últimos movimientos</h2>
@@ -647,8 +760,16 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
             </button>
           </div>
           <div className="tx-list">
-            {d.recent.map((t) => (
-              <TxRow key={t.id} tx={t} cats={catMap} onClick={() => onEdit(t)} showDate />
+            {d.recentList.map((t) => (
+              <TxRow
+                key={t.id}
+                tx={t}
+                cats={catMap}
+                onClick={() => onEdit(t)}
+                showDate
+                transfer={isTransfer(t) ? d.tmap.get(t.id.replace(/-(out|in)$/, '')) : undefined}
+                totalView={group === 'all'}
+              />
             ))}
           </div>
         </section>

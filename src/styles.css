@@ -1978,6 +1978,114 @@ p {
   align-self: flex-start;
 }
 
+/* ---------- Dividir / transferir / por sección ---------- */
+.split-box {
+  padding: 12px;
+  border-radius: var(--r-md);
+  background: var(--field);
+  border: 1px solid var(--glass-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: -6px;
+  animation: in-fade 0.25s var(--ease-out) both;
+}
+.split-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.split-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.split-row .money-input {
+  width: 46%;
+}
+.split-row .input {
+  height: 46px;
+  background: var(--glass-strong);
+}
+.split-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink-2);
+  padding: 4px 2px 0;
+}
+.transfer-arrow {
+  display: flex;
+  justify-content: center;
+  color: var(--ink-3);
+  margin: -8px 0;
+  transform: rotate(90deg);
+}
+.chip:disabled {
+  opacity: 0.35;
+}
+.amount-field.transfer input {
+  color: var(--ink);
+}
+.repeat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.c-muted {
+  color: var(--ink-2);
+}
+.transfer-note {
+  margin-top: 4px;
+  font-size: 12.5px;
+}
+.section-list {
+  display: flex;
+  flex-direction: column;
+}
+.section-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--hair);
+}
+.section-row:last-child {
+  border-bottom: 0;
+}
+.section-row .info {
+  flex: 1;
+  min-width: 0;
+}
+.section-row .title {
+  display: block;
+  font-size: 15.5px;
+  font-weight: 600;
+}
+.section-row .meta {
+  display: block;
+  font-size: 12.5px;
+  color: var(--ink-3);
+  margin-top: 3px;
+}
+.section-row .meta b {
+  font-weight: 600;
+}
+.section-bal {
+  font-size: 19px;
+  white-space: nowrap;
+}
+
 /* ---------- Toast ---------- */
 .toast-host {
   position: fixed;

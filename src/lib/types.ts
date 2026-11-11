@@ -39,8 +39,14 @@ export interface Transaction {
   sectionId: string | null;
 }
 
+export type Frequency = 'monthly' | 'weekly';
+
 export interface Recurring {
   id: string;
+  /** Cada mes (día del mes) o cada semana (día de la semana) */
+  frequency: Frequency;
+  /** 1 = lunes … 7 = domingo (solo semanales) */
+  dayOfWeek: number | null;
   type: TxType;
   amount: number;
   categoryId: string | null;

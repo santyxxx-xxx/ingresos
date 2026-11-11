@@ -6,8 +6,13 @@ import { CategoryPicker } from './CategoryPicker';
 import { SectionPicker } from './SectionPicker';
 import { useFeedback } from './Feedback';
 import { catInfo, useData } from '../lib/data';
-import type { Recurring, TxType } from '../lib/types';
-import { centsToInput, haptic, money, parseAmount, todayISO } from '../lib/utils';
+import type { Frequency, Recurring, TxType } from '../lib/types';
+import { WEEKDAYS, WEEKDAYS_SHORT, centsToInput, haptic, isoDow, money, parseAmount, todayISO } from '../lib/utils';
+
+/** Aproximación mensual: un recurrente semanal ocurre ~52/12 veces al mes */
+const perMonth = (r: Recurring) => (r.frequency === 'weekly' ? Math.round((r.amount * 52) / 12) : r.amount);
+const when = (r: Recurring) =>
+  r.frequency === 'weekly' && r.dayOfWeek ? `Cada ${WEEKDAYS[r.dayOfWeek]}` : `Día ${r.dayOfMonth} de cada mes`;
 
 export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { recurring, catMap, groupMap, groups, saveRecurring, deleteRecurring } = useData();
@@ -21,6 +26,8 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
   const [sectionId, setSectionId] = useState<string | null>(null);
   const [place, setPlace] = useState('');
   const [day, setDay] = useState(1);
+  const [freq, setFreq] = useState<Frequency>('monthly');
+  const [dow, setDow] = useState(1);
   const [active, setActive] = useState(true);
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -37,6 +44,8 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
     setSectionId(r ? r.sectionId : groups[0]?.id ?? null);
     setPlace(r?.place ?? '');
     setDay(r?.dayOfMonth ?? new Date().getDate());
+    setFreq(r?.frequency ?? 'monthly');
+    setDow(r?.dayOfWeek ?? isoDow(todayISO()));
     setActive(r?.active ?? true);
     setError('');
     setSaving(false);
@@ -57,6 +66,8 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
         sectionId,
         place: place.trim(),
         dayOfMonth: day,
+        frequency: freq,
+        dayOfWeek: freq === 'weekly' ? dow : null,
         startDate: editing?.startDate ?? todayISO(),
         active
       });
@@ -97,26 +108,33 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
     }
   };
 
-  const monthlyExpense = recurring.filter((r) => r.active && r.type === 'expense').reduce((a, r) => a + r.amount, 0);
-  const monthlyIncome = recurring.filter((r) => r.active && r.type === 'income').reduce((a, r) => a + r.amount, 0);
+  const monthlyExpense = recurring.filter((r) => r.active && r.type === 'expense').reduce((a, r) => a + perMonth(r), 0);
+  const monthlyIncome = recurring.filter((r) => r.active && r.type === 'income').reduce((a, r) => a + perMonth(r), 0);
+  const approx = recurring.some((r) => r.active && r.frequency === 'weekly') ? '≈ ' : '';
 
   return (
     <Sheet open={open} onClose={onClose} title={mode === 'list' ? 'Recurrentes' : editing ? 'Editar recurrente' : 'Nuevo recurrente'}>
       {mode === 'list' ? (
         <>
           <p className="note" style={{ marginTop: -6 }}>
-            Gastos o ingresos que se repiten cada mes (arriendo, internet, Netflix, sueldo). Se registran solos el día que
-            elijas.
+            Gastos o ingresos que se repiten cada mes o cada semana (arriendo, Netflix, mesada, sueldo). Se registran
+            solos el día que elijas.
           </p>
           {recurring.length > 0 && (
             <div className="summary-line">
               <div className="pill glass">
                 <small>Gastos fijos al mes</small>
-                <b className="c-expense">{money(monthlyExpense)}</b>
+                <b className="c-expense">
+                  {approx}
+                  {money(monthlyExpense)}
+                </b>
               </div>
               <div className="pill glass">
                 <small>Ingresos fijos al mes</small>
-                <b className="c-income">{money(monthlyIncome)}</b>
+                <b className="c-income">
+                  {approx}
+                  {money(monthlyIncome)}
+                </b>
               </div>
             </div>
           )}
@@ -131,7 +149,7 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
                       <span className="info">
                         <span className="title">{r.place || c.name}</span>
                         <span className="meta">
-                          Día {r.dayOfMonth} · {c.full}
+                          {when(r)} · {c.full}
                           {r.sectionId && groupMap.get(r.sectionId) ? ` · ${groupMap.get(r.sectionId)!.name}` : ''}
                           {!r.active && ' · en pausa'}
                         </span>
@@ -217,6 +235,32 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
             />
           </div>
           <div>
+            <span className="field-label">Se repite</span>
+            <Segmented
+              value={freq}
+              onChange={setFreq}
+              options={[
+                { value: 'monthly', label: 'Cada mes' },
+                { value: 'weekly', label: 'Cada semana' }
+              ]}
+            />
+          </div>
+          {freq === 'weekly' ? (
+            <div>
+              <span className="field-label">Día de la semana</span>
+              <div className="day-grid">
+                {[1, 2, 3, 4, 5, 6, 7].map((d) => (
+                  <button key={d} type="button" aria-pressed={dow === d} onClick={() => setDow(d)} aria-label={WEEKDAYS[d]}>
+                    {WEEKDAYS_SHORT[d]}
+                  </button>
+                ))}
+              </div>
+              <p className="note" style={{ marginTop: 6 }}>
+                Se registra cada {WEEKDAYS[dow]}. Unas {Math.round((52 / 12) * 10) / 10} veces al mes.
+              </p>
+            </div>
+          ) : (
+          <div>
             <span className="field-label">Día del mes</span>
             <div className="day-grid">
               {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
@@ -227,12 +271,15 @@ export function RecurringSheet({ open, onClose }: { open: boolean; onClose: () =
             </div>
             {day > 28 && <p className="note" style={{ marginTop: 6 }}>En meses más cortos se registra el último día.</p>}
           </div>
+          )}
           {editing && (
             <button type="button" className={`toggle-row ${active ? 'on' : ''}`} onClick={() => setActive((a) => !a)}>
               <Play size={18} strokeWidth={1.75} />
               <span className="info">
                 <span className="title">Activo</span>
-                <span className="meta">{active ? 'Se registra cada mes' : 'En pausa: no se registra'}</span>
+                <span className="meta">
+                  {active ? (freq === 'weekly' ? 'Se registra cada semana' : 'Se registra cada mes') : 'En pausa: no se registra'}
+                </span>
               </span>
               <span className="switch" aria-hidden="true" />
             </button>

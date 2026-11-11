@@ -111,3 +111,26 @@ export function haptic(pattern: number | number[] = 12) {
 export function normalizePlace(p: string): string {
   return p.trim().toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 }
+
+/** Días de la semana, índice ISO 1 = lunes … 7 = domingo */
+export const WEEKDAYS = ['', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado', 'domingo'];
+export const WEEKDAYS_SHORT = ['', 'L', 'M', 'X', 'J', 'V', 'S', 'D'];
+
+/** Día de la semana ISO (1 = lunes … 7 = domingo) de una fecha YYYY-MM-DD */
+export function isoDow(iso: string): number {
+  const [y, m, d] = iso.split('-').map(Number);
+  const js = new Date(y, m - 1, d).getDay();
+  return js === 0 ? 7 : js;
+}
+
+/** Fechas (YYYY-MM-DD) de un día de la semana dentro de un mes, desde una fecha de inicio */
+export function weekdayDatesInMonth(month: string, dow: number, from: string): string[] {
+  const [y, m] = month.split('-').map(Number);
+  const days = new Date(y, m, 0).getDate();
+  const out: string[] = [];
+  for (let d = 1; d <= days; d++) {
+    const iso = `${month}-${String(d).padStart(2, '0')}`;
+    if (isoDow(iso) === dow && iso >= from) out.push(iso);
+  }
+  return out;
+}
