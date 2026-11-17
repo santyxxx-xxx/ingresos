@@ -1,11 +1,21 @@
 import { useMemo, useState } from 'react';
-import { ArrowDownRight, ArrowUpRight, ChevronRight, Plus, Target } from 'lucide-react';
+import { ArrowDownRight, ArrowUpRight, ChevronRight, Eye, EyeOff, Plus, SlidersHorizontal, Target } from 'lucide-react';
+import { DailySheet } from '../components/DailySheet';
 import { Header } from '../components/Header';
 import { MonthPicker } from '../components/MonthPicker';
 import { Donut, type Slice } from '../components/Donut';
 import { TxRow } from '../components/TxRow';
 import { useAccount } from '../lib/account';
-import { UNCATEGORIZED, catInfo, isTransfer, rootOf, transferMap, useData, useTxRange } from '../lib/data';
+import {
+  UNCATEGORIZED,
+  catInfo,
+  dailyCategoryIds,
+  isTransfer,
+  rootOf,
+  transferMap,
+  useData,
+  useTxRange
+} from '../lib/data';
 import { SectionFilter, matchesSection } from '../components/SectionFilter';
 import type { Category, Transaction } from '../lib/types';
 import {
@@ -234,6 +244,31 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
   const from = shiftMonth(month, -5);
   const { data: range, error, loading } = useTxRange(from, month);
   const [group, setGroup] = useState<string>('all');
+  const [dailyOpen, setDailyOpen] = useState(false);
+  // Ocultar montos (se recuerda en este dispositivo)
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem('hide-amounts') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggleHidden = () => {
+    setHidden((h) => {
+      try {
+        localStorage.setItem('hide-amounts', h ? '0' : '1');
+      } catch {
+        /* noop */
+      }
+      return !h;
+    });
+  };
+  /** Monto o XX si está oculto */
+  const m = (cents: number) => (hidden ? '$XXX,XX' : money(cents));
+  const dailySet = useMemo(
+    () => dailyCategoryIds(account.dailyCategories, categories),
+    [account.dailyCategories, categories]
+  );
 
   const prevMonth = shiftMonth(month, -1);
   const isCurrent = month === currentMonth();
@@ -270,8 +305,11 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
     // Promedios y proyección
     const today = todayISO();
     const daysElapsed = isCurrent ? Number(today.slice(8, 10)) : daysIn(month);
-    const avgDaily = daysElapsed ? expense / daysElapsed : 0;
-    const projection = isCurrent ? Math.round(avgDaily * daysIn(month)) : expense;
+    // Solo cuentan las categorías del día a día (comida, transporte…), no compras grandes
+    const dailyExpense = sum(exp.filter((t) => dailySet.has(rootOf(catMap, t.categoryId)?.id ?? '')));
+    const avgDaily = daysElapsed ? dailyExpense / daysElapsed : 0;
+    // Proyección: el gasto diario llevado a todo el mes + lo que ya se gastó en otras cosas
+    const projection = isCurrent ? Math.round(avgDaily * daysIn(month)) + (expense - dailyExpense) : expense;
     const biggest = exp.reduce<Transaction | null>((a, t) => (!a || t.amount > a.amount ? t : a), null);
 
     // 6 meses
@@ -370,7 +408,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
       changes,
       budgets
     };
-  }, [range, group, catMap, categories, groups, month, prevMonth, from, isCurrent]);
+  }, [range, group, catMap, categories, groups, month, prevMonth, from, isCurrent, dailySet]);
 
   // Fijos del mes (solo mes actual)
   const fixed = useMemo(() => {
@@ -414,6 +452,12 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
   const budgetTotal = d.budgets.reduce((a, b) => a + b.budget, 0);
   const budgetSpent = d.budgets.reduce((a, b) => a + b.spent, 0);
   const pendingFixed = fixed.filter((f) => !f.done);
+  const dailyNames = [...dailySet].map((id) => catMap.get(id)?.name).filter(Boolean) as string[];
+  const dailyLabel = dailyNames.length
+    ? dailyNames.length <= 2
+      ? dailyNames.join(' y ')
+      : `${dailyNames.slice(0, 2).join(', ')} y ${dailyNames.length - 2} más`
+    : 'Toca para elegir';
   const sectionName = (sid: string | null) => (sid ? groupMap.get(sid) : undefined);
 
   return (
@@ -435,6 +479,14 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
       {error && <p className="error-text">{error}</p>}
 
       <section className={`card glass balance ${dim}`}>
+        <button
+          className="icon-btn eye-btn"
+          onClick={toggleHidden}
+          aria-label={hidden ? 'Mostrar montos' : 'Ocultar montos'}
+          aria-pressed={hidden}
+        >
+          {hidden ? <EyeOff size={19} strokeWidth={1.75} /> : <Eye size={19} strokeWidth={1.75} />}
+        </button>
         <div className="k">
           {group === 'all'
             ? groups.length
@@ -444,19 +496,29 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
               ? 'Balance sin sección'
               : `Balance de ${groupMap.get(group)?.name ?? ''}`}
         </div>
-        <div className={`big-number ${d.balance < 0 ? 'neg' : ''}`}>
-          {bal.sign}
-          {bal.int}
-          <span className="dec">{bal.dec}</span>
+        <div className={`big-number ${d.balance < 0 && !hidden ? 'neg' : ''}`}>
+          {hidden ? (
+            <>
+              $XXX<span className="dec">,XX</span>
+            </>
+          ) : (
+            <>
+              {bal.sign}
+              {bal.int}
+              <span className="dec">{bal.dec}</span>
+            </>
+          )}
         </div>
         <p className="balance-note">
           {d.count === 0
             ? 'Aún no hay movimientos este mes.'
-            : d.balance >= 0
+            : hidden
+              ? 'Montos ocultos. Toca el ojo para verlos.'
+              : d.balance >= 0
               ? `Te queda el ${d.income ? Math.round((d.balance / d.income) * 100) : 0}% de lo que ingresó.`
               : 'Este mes estás gastando más de lo que entra.'}
         </p>
-        {(d.transfersIn > 0 || d.transfersOut > 0) && (
+        {!hidden && (d.transfersIn > 0 || d.transfersOut > 0) && (
           <p className="balance-note transfer-note">
             ↔️ Transferencias:
             {d.transfersIn > 0 && <span className="c-income"> recibiste {money(d.transfersIn)}</span>}
@@ -474,7 +536,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
             </span>
             Ingresos
           </div>
-          <div className="val">{money(d.income)}</div>
+          <div className="val">{m(d.income)}</div>
           <Delta now={d.income} before={d.prevIncome} goodWhenUp label={prevLabel} />
         </div>
         <div className="stat glass expense">
@@ -484,7 +546,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
             </span>
             Gastos
           </div>
-          <div className="val">{money(d.expense)}</div>
+          <div className="val">{m(d.expense)}</div>
           <Delta now={d.expense} before={d.prevExpense} goodWhenUp={false} label={prevLabel} />
         </div>
       </div>
@@ -508,14 +570,14 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
                   <span className="info">
                     <span className="title">{g?.name ?? 'Sin sección'}</span>
                     <span className="meta">
-                      Entra <b className="c-income">{money(s.income + s.tIn)}</b> · Sale{' '}
-                      <b className="c-expense">{money(s.expense + s.tOut)}</b>
+                      Entra <b className="c-income">{m(s.income + s.tIn)}</b> · Sale{' '}
+                      <b className="c-expense">{m(s.expense + s.tOut)}</b>
                       {(s.tIn > 0 || s.tOut > 0) && ' · incluye transferencias'}
                     </span>
                   </span>
-                  <span className={`section-bal display ${s.balance < 0 ? 'c-expense' : ''}`}>
-                    {s.balance < 0 ? '−' : ''}
-                    {money(Math.abs(s.balance))}
+                  <span className={`section-bal display ${s.balance < 0 && !hidden ? 'c-expense' : ''}`}>
+                    {s.balance < 0 && !hidden ? '−' : ''}
+                    {m(Math.abs(s.balance))}
                   </span>
                 </button>
               );
@@ -537,18 +599,21 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
 
       {d.expense > 0 && (
         <div className={`insights ${dim}`}>
-          <div className="insight glass">
-            <small>Promedio diario</small>
-            <b className="display">{money(Math.round(d.avgDaily))}</b>
-          </div>
+          <button className="insight glass pressable" onClick={() => setDailyOpen(true)}>
+            <small>
+              Gasto diario <SlidersHorizontal size={11} strokeWidth={2} style={{ verticalAlign: -1 }} />
+            </small>
+            <b className="display">{m(Math.round(d.avgDaily))}</b>
+            <span>{dailyLabel}</span>
+          </button>
           <div className="insight glass">
             <small>{isCurrent ? 'Proyección del mes' : 'Promedio 6 meses'}</small>
-            <b className="display">{money(isCurrent ? d.projection : Math.round(d.avgExpense6))}</b>
+            <b className="display">{m(isCurrent ? d.projection : Math.round(d.avgExpense6))}</b>
           </div>
           {d.biggest && (
             <button className="insight glass pressable" onClick={() => onEdit(d.biggest!)}>
               <small>Mayor gasto</small>
-              <b className="display">{money(d.biggest.amount)}</b>
+              <b className="display">{m(d.biggest.amount)}</b>
               <span>{d.biggest.place || catInfo(catMap, d.biggest.categoryId).name}</span>
             </button>
           )}
@@ -774,6 +839,7 @@ export function Dashboard({ month, setMonth, onEdit, onAdd, onSeeAll, onSettings
           </div>
         </section>
       )}
+      <DailySheet open={dailyOpen} onClose={() => setDailyOpen(false)} />
     </div>
   );
 }

@@ -599,6 +599,22 @@ export function setLastSection(id: string | null) {
   }
 }
 
+/* ---------- Gasto diario ---------- */
+
+const DEFAULT_DAILY = ['base-comida', 'base-transporte', 'base-hogar'];
+
+/**
+ * Categorías principales de gasto que cuentan para el promedio diario.
+ * Si el usuario aún no eligió: Comida, Transporte y Hogar (si existen); si no hay ninguna, todas.
+ */
+export function dailyCategoryIds(saved: string[] | null, categories: Category[]): Set<string> {
+  const roots = categories.filter((c) => c.type === 'expense' && !c.parentId && !isSystemCategory(c.id));
+  const exists = new Set(roots.map((c) => c.id));
+  if (saved) return new Set(saved.filter((id) => exists.has(id)));
+  const defaults = DEFAULT_DAILY.filter((id) => exists.has(id));
+  return new Set(defaults.length ? defaults : roots.map((c) => c.id));
+}
+
 /* ---------- Ayudas de categorías ---------- */
 
 export const UNCATEGORIZED = { name: 'Sin categoría', emoji: '❔' };

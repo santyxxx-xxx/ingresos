@@ -12,6 +12,9 @@ interface AccountCtx {
   /** true si hay que mostrar el tutorial automáticamente (cuentas nuevas que no lo han visto) */
   showTutorialOnStart: boolean;
   markTutorialSeen: () => Promise<void>;
+  /** Categorías que cuentan para el promedio diario (null = aún no elegidas) */
+  dailyCategories: string[] | null;
+  setDailyCategories: (ids: string[]) => Promise<void>;
   signInWithGoogle: () => Promise<void>;
   signIn: (email: string, password: string) => Promise<void>;
   /** 'session' = ya entró; 'confirm' = debe confirmar el correo primero */
@@ -93,6 +96,16 @@ export function AccountProvider({ children }: { children: ReactNode }) {
   const createdAt = session?.user.created_at ?? '';
   const showTutorialOnStart = !!session && createdAt >= TUTORIAL_SINCE && meta.tutorial_seen !== true;
 
+  const dailyCategories = Array.isArray(meta.daily_categories)
+    ? (meta.daily_categories as unknown[]).filter((x): x is string => typeof x === 'string')
+    : null;
+
+  const setDailyCategories = useCallback(async (ids: string[]) => {
+    const { data, error } = await supabase.auth.updateUser({ data: { daily_categories: ids } });
+    if (error) throw new Error(friendlyError(error));
+    if (data.user) setSession((s) => (s ? { ...s, user: data.user! } : s));
+  }, []);
+
   const markTutorialSeen = useCallback(async () => {
     const { data, error } = await supabase.auth.updateUser({ data: { tutorial_seen: true } });
     if (!error && data.user) setSession((s) => (s ? { ...s, user: data.user! } : s));
@@ -108,6 +121,8 @@ export function AccountProvider({ children }: { children: ReactNode }) {
         setName,
         showTutorialOnStart,
         markTutorialSeen,
+        dailyCategories,
+        setDailyCategories,
         signInWithGoogle,
         signIn,
         signUp,

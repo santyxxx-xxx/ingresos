@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { Check, Trash2 } from 'lucide-react';
+import { CalendarDays, Check, Trash2 } from 'lucide-react';
 import { Sheet } from './Sheet';
 import { Segmented } from './Segmented';
 import { useFeedback } from './Feedback';
-import { childrenOf, fetchCategoryUsage, useData } from '../lib/data';
+import { childrenOf, dailyCategoryIds, fetchCategoryUsage, useData } from '../lib/data';
+import { useAccount } from '../lib/account';
 import type { Category, TxType } from '../lib/types';
 import { centsToInput, haptic, parseAmount } from '../lib/utils';
 
@@ -30,6 +31,8 @@ export function CategorySheet({ open, onClose, editing, defaultType, parent }: P
   const [error, setError] = useState('');
   const [saving, setSaving] = useState(false);
   const [budget, setBudget] = useState('');
+  const [daily, setDaily] = useState(false);
+  const account = useAccount();
 
   const editingParent = editing?.parentId ? catMap.get(editing.parentId) : undefined;
   const isSub = !!parent || !!editing?.parentId;
@@ -43,12 +46,14 @@ export function CategorySheet({ open, onClose, editing, defaultType, parent }: P
       setName(editing.name);
       setEmoji(editing.emoji);
       setBudget(editing.budget ? centsToInput(editing.budget) : '');
+      setDaily(dailyCategoryIds(account.dailyCategories, categories).has(editing.id));
     } else {
       const t = parent?.type ?? defaultType;
       setType(t);
       setName('');
       setEmoji(parent?.emoji ?? EMOJIS[t][0]);
       setBudget('');
+      setDaily(false);
     }
   }, [open, editing, defaultType, parent]);
 
@@ -69,7 +74,7 @@ export function CategorySheet({ open, onClose, editing, defaultType, parent }: P
     }
     setSaving(true);
     try {
-      await saveCategory({
+      const id = await saveCategory({
         id: editing?.id,
         name: n,
         emoji: emoji.trim() || '🏷️',
@@ -77,6 +82,15 @@ export function CategorySheet({ open, onClose, editing, defaultType, parent }: P
         parentId: editing ? editing.parentId : parent?.id ?? null,
         budget: isSub ? undefined : type === 'expense' ? budgetCents : null
       });
+      // ¿Cuenta como gasto diario? (se guarda en la cuenta, junto al nombre)
+      if (!isSub && type === 'expense') {
+        const current = dailyCategoryIds(account.dailyCategories, categories);
+        if (current.has(id) !== daily) {
+          if (daily) current.add(id);
+          else current.delete(id);
+          await account.setDailyCategories([...current]);
+        }
+      }
       haptic(15);
       toast(editing ? 'Guardado' : isSub ? 'Subcategoría creada' : 'Categoría creada');
       onClose();
@@ -197,6 +211,23 @@ export function CategorySheet({ open, onClose, editing, defaultType, parent }: P
 
       {!isSub && type === 'expense' && (
         <div>
+          <button
+            type="button"
+            className={`toggle-row ${daily ? 'on' : ''}`}
+            style={{ marginBottom: 18 }}
+            onClick={() => {
+              haptic(5);
+              setDaily((d) => !d);
+            }}
+            aria-pressed={daily}
+          >
+            <CalendarDays size={18} strokeWidth={1.75} />
+            <span className="info">
+              <span className="title">Cuenta como gasto diario</span>
+              <span className="meta">Comida, transporte, servicios… no compras grandes de una sola vez</span>
+            </span>
+            <span className="switch" aria-hidden="true" />
+          </button>
           <label className="field-label" htmlFor="cat-budget">
             Presupuesto mensual <span className="optional">(opcional)</span>
           </label>

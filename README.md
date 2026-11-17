@@ -13,7 +13,8 @@ Hecha con React + Vite + TypeScript y Supabase (Auth + Postgres). Estilo *liquid
   - Tarjeta **Por sección** en el resumen: lo que entra, sale y queda en cada una.
 - **Resumen** (vista **Total** o por sección):
   - Balance del mes, ingresos y gastos con su variación frente al mes anterior.
-  - Promedio diario, proyección de fin de mes y el gasto más grande.
+  - **Gasto diario** (solo las categorías del día a día que elijas; se guarda en `user_metadata.daily_categories`), proyección de fin de mes y el gasto más grande.
+  - Botón de **ojo** para ocultar los montos (se recuerda en el dispositivo).
   - **Presupuestos** (en la vista Total): cuánto llevas de cada límite mensual, con aviso al 80 % y al pasarte.
   - Dónde gasto más (dona + ranking por categoría, toca para ver subcategorías).
   - **Mes a mes:** gráfico de los últimos 6 meses y las categorías que más cambiaron.

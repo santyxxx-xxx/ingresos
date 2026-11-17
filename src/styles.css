@@ -2357,6 +2357,42 @@ p {
   margin-top: 2px;
 }
 
+/* ---------- Ojo y gasto diario ---------- */
+.balance {
+  position: relative;
+}
+.eye-btn {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  color: var(--ink-3);
+  background: var(--field);
+  border: 1px solid var(--glass-border);
+}
+.eye-btn[aria-pressed='true'] {
+  color: var(--accent-ink);
+}
+.check-row .checkbox {
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+  border: 1.5px solid rgba(42, 41, 37, 0.22);
+  display: grid;
+  place-items: center;
+  flex: none;
+  color: var(--on-accent);
+  transition: background 0.2s, border-color 0.2s;
+}
+.check-row[aria-pressed='true'] .checkbox {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+.check-row[aria-pressed='false'] .title {
+  color: var(--ink-2);
+}
+
 /* ---------- Toast ---------- */
 .toast-host {
   position: fixed;
